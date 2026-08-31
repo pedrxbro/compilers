@@ -1,0 +1,122 @@
+#Options
+GenerateScanner = true
+GenerateParser = true
+Language = Java
+ScannerName = Lexico
+ParserName = Sintatico
+SemanticName = Semantico
+ScannerCaseSensitive = true
+ScannerTable = Full
+Input = String
+Parser = SLR
+#RegularDefinitions
+LETRA : [a-zA-Z]
+DIGITO : [0-9]
+BINARIO : [01]
+HEXADECIMAL : [0-9a-fA-F]
+ID_INICIO : [a-zA-Z_]
+ID_RESTO : [a-zA-Z0-9_]
+WS      : [\ \t\n\r]+
+BARRA : /
+#Tokens
+// Espaços em branco
+: {WS}
+
+// Literais numéricos e identificadores
+INTEIRO_DECIMAL : {DIGITO}+
+INTEIRO_BINARIO : 0b{BINARIO}+
+INTEIRO_HEXADECIMAL : 0x{HEXADECIMAL}+
+FLUTUANTE_LITERAL : {DIGITO}+\.{DIGITO}+
+IDENTIFICADOR : {ID_INICIO}{ID_RESTO}*
+
+
+// Palavras reservadas
+PROGRAMA = IDENTIFICADOR : "programa"
+INICIO = IDENTIFICADOR : "inicio"
+FIM = IDENTIFICADOR : "fim"
+
+INTEIRO = IDENTIFICADOR : "inteiro"
+FLUTUANTE = IDENTIFICADOR : "flutuante"
+TEXTO = IDENTIFICADOR : "texto"
+LOGICO = IDENTIFICADOR : "logico"
+CARACTERE = IDENTIFICADOR : "caractere"
+
+SE = IDENTIFICADOR : "se"
+ENTAO = IDENTIFICADOR : "entao"
+SENAO = IDENTIFICADOR : "senao"
+FIMSE = IDENTIFICADOR : "fimse"
+
+ENQUANTO = IDENTIFICADOR : "enquanto"
+FACA = IDENTIFICADOR : "faca"
+FIMENQUANTO = IDENTIFICADOR : "fimenquanto"
+
+PARA = IDENTIFICADOR : "para"
+ATE = IDENTIFICADOR : "ate"
+PASSO = IDENTIFICADOR : "passo"
+FIMPARA = IDENTIFICADOR : "fimpara"
+
+FUNCAO = IDENTIFICADOR : "funcao"
+RETORNE = IDENTIFICADOR : "retorne"
+FIMFUNCAO = IDENTIFICADOR : "fimfuncao"
+
+LEIA = IDENTIFICADOR : "leia"
+MOSTRE = IDENTIFICADOR : "mostre"
+RECEBE = IDENTIFICADOR : "recebe"
+
+VERDADEIRO = IDENTIFICADOR : "verdadeiro"
+FALSO = IDENTIFICADOR : "falso"
+NULO = IDENTIFICADOR : "nulo"
+
+// Operadores
+MAIS = IDENTIFICADOR : "mais"
+MENOS = IDENTIFICADOR : "menos"
+VEZES = IDENTIFICADOR : "vezes"
+DIVIDO = IDENTIFICADOR : "divido"
+RESTO = IDENTIFICADOR : "resto"
+
+MAIOR_QUE = IDENTIFICADOR : "maiorQue"
+MENOR_QUE = IDENTIFICADOR : "menorQue"
+MAIOR_IGUAL_QUE = IDENTIFICADOR : "maiorIgualQue"
+MENOR_IGUAL_QUE = IDENTIFICADOR : "menorIgualQue"
+IGUAL = IDENTIFICADOR : "igual"
+DIFERENTE = IDENTIFICADOR : "diferente"
+
+E_LOGICO = IDENTIFICADOR : "e"
+OU_LOGICO = IDENTIFICADOR : "ou"
+NAO_LOGICO = IDENTIFICADOR : "nao"
+
+DESLOCA_DIREITA = IDENTIFICADOR : "deslocaDireita"
+DESLOCA_ESQUERDA = IDENTIFICADOR : "deslocaEsquerda"
+E_BIT_BIT = IDENTIFICADOR : "eBitBit"
+OU_BIT_BIT = IDENTIFICADOR : "ouBitBit"
+NAO_BIT_BIT = IDENTIFICADOR : "naoBitBit"
+OU_EXCLUSIVO_BIT_BIT = IDENTIFICADOR : "ouExclusivoBitBit"
+
+// Literais de caractere e texto
+CARACTERE_LITERAL : "'" [^'\n\r] "'"
+TEXTO_LITERAL : \" [^\"\n\r]* \"
+
+// Delimitadores
+ABRE_PARENTESE : "("
+FECHA_PARENTESE : ")"
+ABRE_COLCHETE : "["
+FECHA_COLCHETE : "]"
+ABRE_CHAVE : "{"
+FECHA_CHAVE : "}"
+
+// Pontuadores
+VIRGULA : ","
+PONTO : "."
+PONTO_VIRGULA : ";"
+DOIS_PONTOS : ":"
+
+// Comentarios
+// Depois de // aceita qualquer coisa até o fim da linha
+COMENTARIO_LINHA : {BARRA}{BARRA}[^\n\r]* 
+
+// Depois de /* aceita qualquer conteúdo, várias linhas, até encontrar */
+COMENTARIO_MULTILINHA :! {BARRA}\*([^\*]|\*+[^\*/])*\*+{BARRA}
+#NonTerminals
+
+#Grammar
+
