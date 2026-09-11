@@ -1,0 +1,233 @@
+#Options
+GenerateScanner = true
+GenerateParser = true
+Language = C++
+ScannerName = Lexico
+ParserName = Sintatico
+SemanticName = Semantico
+ScannerCaseSensitive = true
+ScannerTable = Full
+Input = String
+Parser = SLR
+#RegularDefinitions
+LETRA : [a-zA-Z]
+DIGITO : [0-9]
+BINARIO : [01]
+HEXADECIMAL : [0-9a-fA-F]
+ID_INICIO : [a-zA-Z_]
+ID_RESTO : [a-zA-Z0-9_]
+WS      : [\ \t\n\r]+
+BARRA : /
+#Tokens
+// Espaços em branco
+: {WS}
+
+// Literais numéricos e identificadores
+INTEIRO_DECIMAL : {DIGITO}+
+INTEIRO_BINARIO : 0b{BINARIO}+
+INTEIRO_HEXADECIMAL : 0x{HEXADECIMAL}+
+FLUTUANTE_LITERAL : {DIGITO}+\.{DIGITO}+
+IDENTIFICADOR : {ID_INICIO}{ID_RESTO}*
+
+
+// Palavras reservadas
+PROGRAMA = IDENTIFICADOR : "programa"
+INICIO = IDENTIFICADOR : "inicio"
+FIM = IDENTIFICADOR : "fim"
+
+INTEIRO = IDENTIFICADOR : "inteiro"
+FLUTUANTE = IDENTIFICADOR : "flutuante"
+TEXTO = IDENTIFICADOR : "texto"
+LOGICO = IDENTIFICADOR : "logico"
+CARACTERE = IDENTIFICADOR : "caractere"
+
+SE = IDENTIFICADOR : "se"
+ENTAO = IDENTIFICADOR : "entao"
+SENAO = IDENTIFICADOR : "senao"
+FIMSE = IDENTIFICADOR : "fimse"
+
+ENQUANTO = IDENTIFICADOR : "enquanto"
+FACA = IDENTIFICADOR : "faca"
+FIMENQUANTO = IDENTIFICADOR : "fimenquanto"
+
+PARA = IDENTIFICADOR : "para"
+ATE = IDENTIFICADOR : "ate"
+PASSO = IDENTIFICADOR : "passo"
+FIMPARA = IDENTIFICADOR : "fimpara"
+
+FUNCAO = IDENTIFICADOR : "funcao"
+RETORNE = IDENTIFICADOR : "retorne"
+FIMFUNCAO = IDENTIFICADOR : "fimfuncao"
+
+LEIA = IDENTIFICADOR : "leia"
+MOSTRE = IDENTIFICADOR : "mostre"
+RECEBE = IDENTIFICADOR : "recebe"
+
+VERDADEIRO = IDENTIFICADOR : "verdadeiro"
+FALSO = IDENTIFICADOR : "falso"
+NULO = IDENTIFICADOR : "nulo"
+
+// Operadores
+MAIS = IDENTIFICADOR : "mais"
+MENOS = IDENTIFICADOR : "menos"
+VEZES = IDENTIFICADOR : "vezes"
+DIVIDO = IDENTIFICADOR : "divido"
+RESTO = IDENTIFICADOR : "resto"
+
+MAIOR_QUE = IDENTIFICADOR : "maiorQue"
+MENOR_QUE = IDENTIFICADOR : "menorQue"
+MAIOR_IGUAL_QUE = IDENTIFICADOR : "maiorIgualQue"
+MENOR_IGUAL_QUE = IDENTIFICADOR : "menorIgualQue"
+IGUAL = IDENTIFICADOR : "igual"
+DIFERENTE = IDENTIFICADOR : "diferente"
+
+E_LOGICO = IDENTIFICADOR : "e"
+OU_LOGICO = IDENTIFICADOR : "ou"
+NAO_LOGICO = IDENTIFICADOR : "nao"
+
+DESLOCA_DIREITA = IDENTIFICADOR : "deslocaDireita"
+DESLOCA_ESQUERDA = IDENTIFICADOR : "deslocaEsquerda"
+E_BIT_BIT = IDENTIFICADOR : "eBitBit"
+OU_BIT_BIT = IDENTIFICADOR : "ouBitBit"
+NAO_BIT_BIT = IDENTIFICADOR : "naoBitBit"
+OU_EXCLUSIVO_BIT_BIT = IDENTIFICADOR : "ouExclusivoBitBit"
+
+// Literais de caractere e texto
+CARACTERE_LITERAL : "'" [^'\n\r] "'"
+TEXTO_LITERAL : \" [^\"\n\r]* \"
+
+// Delimitadores
+ABRE_PARENTESE : "("
+FECHA_PARENTESE : ")"
+ABRE_COLCHETE : "["
+FECHA_COLCHETE : "]"
+ABRE_CHAVE : "{"
+FECHA_CHAVE : "}"
+
+// Pontuadores
+VIRGULA : ","
+PONTO : "."
+PONTO_VIRGULA : ";"
+DOIS_PONTOS : ":"
+
+// Comentarios
+// Depois de // aceita qualquer coisa até o fim da linha
+: {BARRA}{BARRA}[^\n\r]* 
+
+// Depois de /* aceita qualquer conteúdo, várias linhas, até encontrar */
+:! {BARRA}\*([^\*]|\*+[^\*/])*\*+{BARRA}
+
+PROCEDIMENTO = IDENTIFICADOR : "procedimento"
+FIMPROCEDIMENTO = IDENTIFICADOR : "fimprocedimento"
+#NonTerminals
+<programa>
+<lista_comandos>
+<lista_subrotinas>
+<definicao_subrotina>
+<definicao_procedimento>
+<definicao_funcao>
+<retorno>
+<parametros_formais_opcionais>
+<lista_parametros_formais>
+<resto_parametros_formais>
+<parametro_formal>
+<argumentos_opcionais>
+<lista_argumentos>
+<resto_argumentos>
+<comando>
+<declaracao>
+<tipo>
+<lista_identificadores>
+<resto_lista_identificadores>
+<chamada_subrotina>
+<chamada_procedimento>
+<chamada_funcao>
+<item_declaracao>
+<identificador_simples>
+<vetor>
+<tamanho_vetor>
+<atribuicao>
+<destino_atribuicao>
+<posicao_vetor>
+<entrada>
+<saida>
+<item_saida>
+<literal>
+<condicional>
+<senao_opcional>
+<laco_repeticao>
+<laco_pre_testado>
+<laco_controle>
+<operacao_controle>
+<laco_pos_testado>
+<expressao>
+<expressao_ou>
+<expressao_e>
+<expressao_igualdade>
+<expressao_relacional>
+<expressao_aditiva>
+<expressao_multiplicativa>
+<expressao_unaria>
+<expressao_primaria>
+<operando>
+<op_igualdade>
+<op_relacional>
+<op_aditivo>
+<op_multiplicativo>
+<op_unario>
+#Grammar
+<programa> ::= PROGRAMA IDENTIFICADOR <lista_subrotinas>INICIO <lista_comandos> FIM;
+<lista_comandos> ::= <comando> <lista_comandos> | î;
+<lista_subrotinas> ::= <definicao_subrotina> <lista_subrotinas> | î;
+<definicao_subrotina> ::= <definicao_procedimento> | <definicao_funcao>;
+<definicao_procedimento> ::= PROCEDIMENTO IDENTIFICADOR ABRE_PARENTESE <parametros_formais_opcionais> FECHA_PARENTESE INICIO <lista_comandos> FIMPROCEDIMENTO;
+<definicao_funcao> ::= FUNCAO <tipo> IDENTIFICADOR ABRE_PARENTESE <parametros_formais_opcionais> FECHA_PARENTESE INICIO <lista_comandos> <retorno> FIMFUNCAO;
+<retorno> ::= RETORNE <expressao> PONTO_VIRGULA;
+<parametros_formais_opcionais> ::= <lista_parametros_formais> | î;
+<lista_parametros_formais> ::= <parametro_formal> <resto_parametros_formais>;
+<resto_parametros_formais> ::= VIRGULA <parametro_formal> <resto_parametros_formais> | î;
+<parametro_formal> ::= <tipo> <item_declaracao>;
+<argumentos_opcionais> ::= <lista_argumentos> | î;
+<lista_argumentos> ::= <expressao> <resto_argumentos>;
+<resto_argumentos> ::= VIRGULA <expressao> <resto_argumentos> | î;
+<comando> ::= <declaracao> | <atribuicao> | <entrada> | <saida> | <condicional> | <laco_repeticao> | <chamada_procedimento>;
+<declaracao> ::= <tipo> <lista_identificadores> PONTO_VIRGULA;
+<tipo> ::= INTEIRO | FLUTUANTE | TEXTO | LOGICO | CARACTERE;
+<lista_identificadores> ::= <item_declaracao> <resto_lista_identificadores>;
+<resto_lista_identificadores> ::= VIRGULA <item_declaracao> <resto_lista_identificadores> | î;
+<chamada_subrotina> ::= IDENTIFICADOR ABRE_PARENTESE <argumentos_opcionais> FECHA_PARENTESE;
+<chamada_procedimento> ::= <chamada_subrotina> PONTO_VIRGULA;
+<chamada_funcao> ::= <chamada_subrotina>;
+<item_declaracao> ::= <identificador_simples> | <vetor>;
+<identificador_simples> ::= IDENTIFICADOR;
+<vetor> ::= <identificador_simples> ABRE_COLCHETE <tamanho_vetor> FECHA_COLCHETE;
+<tamanho_vetor> ::= INTEIRO_DECIMAL | INTEIRO_BINARIO | INTEIRO_HEXADECIMAL;
+<atribuicao> ::= <destino_atribuicao> RECEBE <expressao> PONTO_VIRGULA;
+<destino_atribuicao> ::= IDENTIFICADOR | <posicao_vetor>;
+<posicao_vetor> ::= IDENTIFICADOR ABRE_COLCHETE <expressao> FECHA_COLCHETE;
+<entrada> ::= LEIA ABRE_PARENTESE <destino_atribuicao> FECHA_PARENTESE PONTO_VIRGULA;
+<saida> ::= MOSTRE ABRE_PARENTESE <item_saida> FECHA_PARENTESE PONTO_VIRGULA;
+<item_saida> ::= <destino_atribuicao> | <literal>;
+<literal> ::= INTEIRO_DECIMAL| INTEIRO_BINARIO| INTEIRO_HEXADECIMAL| FLUTUANTE_LITERAL| CARACTERE_LITERAL| TEXTO_LITERAL| VERDADEIRO| FALSO | NULO; 
+<condicional> ::= SE <expressao> ENTAO <lista_comandos> <senao_opcional> FIMSE;
+<senao_opcional> ::= SENAO <lista_comandos>| î ;
+<laco_repeticao> ::= <laco_pre_testado>| <laco_controle> | <laco_pos_testado>;
+<laco_pre_testado> ::= ENQUANTO <expressao> FACA <lista_comandos> FIMENQUANTO;
+<laco_controle> ::= PARA <operacao_controle> ATE <expressao> PASSO <operacao_controle> FACA <lista_comandos> FIMPARA;
+<operacao_controle> ::= <identificador_simples> RECEBE <expressao>;
+<laco_pos_testado> ::= FACA <lista_comandos> ATE <expressao> PONTO_VIRGULA;
+<expressao> ::= <expressao_ou>;
+<expressao_ou> ::= <expressao_ou> OU_LOGICO <expressao_e>| <expressao_e>;
+<expressao_e> ::= <expressao_e> E_LOGICO <expressao_igualdade>| <expressao_igualdade>;
+<expressao_igualdade> ::= <expressao_igualdade> <op_igualdade> <expressao_relacional> | <expressao_relacional>;
+<expressao_relacional> ::= <expressao_relacional> <op_relacional> <expressao_aditiva> | <expressao_aditiva>;
+<expressao_aditiva> ::= <expressao_aditiva> <op_aditivo> <expressao_multiplicativa>| <expressao_multiplicativa>;
+<expressao_multiplicativa> ::= <expressao_multiplicativa> <op_multiplicativo> <expressao_unaria>| <expressao_unaria>;
+<expressao_unaria> ::= <op_unario> <expressao_unaria>| <expressao_primaria>;
+<expressao_primaria> ::= <operando> | <chamada_funcao> | ABRE_PARENTESE <expressao> FECHA_PARENTESE;
+<operando> ::= IDENTIFICADOR | <posicao_vetor> | <literal>;
+<op_igualdade> ::= IGUAL| DIFERENTE;
+<op_relacional> ::= MAIOR_QUE| MENOR_QUE| MAIOR_IGUAL_QUE| MENOR_IGUAL_QUE;
+<op_aditivo> ::= MAIS| MENOS;
+<op_multiplicativo> ::= VEZES| DIVIDO| RESTO;
+<op_unario> ::= MENOS| NAO_LOGICO;
