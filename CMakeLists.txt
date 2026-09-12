@@ -86,7 +86,7 @@ else()
     else()
 
         add_executable(compiler
-            ${PROJECT_SOURCES
+            ${PROJECT_SOURCES}
         )
 
     endif()
