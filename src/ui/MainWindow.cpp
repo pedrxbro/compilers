@@ -1,0 +1,26 @@
+﻿#include "MainWindow.h"
+#include "ui_MainWindow.h"
+
+MainWindow::MainWindow(QWidget *parent)
+    : QMainWindow(parent)
+    , ui(new Ui::MainWindow)
+{
+    ui->setupUi(this);
+
+    connect(
+        ui->compileButton,
+        &QPushButton::clicked,
+        this,
+        [this]()
+        {
+            ui->messagesArea->setPlainText(
+                "Compilação ainda não integrada."
+                );
+        }
+        );
+}
+
+MainWindow::~MainWindow()
+{
+    delete ui;
+}
