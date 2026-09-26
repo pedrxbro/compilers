@@ -31,6 +31,11 @@ add_library(compiler_core STATIC
     src/compiler/CompilerService.h
     src/compiler/AnalysisResult.h
 
+    # Modelo semântico
+    src/compiler/semantic/SemanticTypes.h
+    src/compiler/semantic/Symbol.cpp
+    src/compiler/semantic/Symbol.h
+
     # Código gerado pelo WebGALS
     generated/webgals/Constants.cpp
     generated/webgals/Lexico.cpp
@@ -46,11 +51,11 @@ target_include_directories(compiler_core
 
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src/compiler
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/compiler/semantic
 
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/generated/webgals
 )
-
 # ============================================================
 # INTERFACE GRÁFICA
 # ============================================================
