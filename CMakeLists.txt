@@ -35,6 +35,10 @@ add_library(compiler_core STATIC
     src/compiler/semantic/SemanticTypes.h
     src/compiler/semantic/Symbol.cpp
     src/compiler/semantic/Symbol.h
+    src/compiler/semantic/Scope.cpp
+    src/compiler/semantic/Scope.h
+    src/compiler/semantic/ScopeManager.cpp
+    src/compiler/semantic/ScopeManager.h
 
     # Código gerado pelo WebGALS
     generated/webgals/Constants.cpp
@@ -56,6 +60,7 @@ target_include_directories(compiler_core
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/generated/webgals
 )
+
 # ============================================================
 # INTERFACE GRÁFICA
 # ============================================================
@@ -170,6 +175,21 @@ add_executable(compiler_service_smoke_test
 )
 
 target_link_libraries(compiler_service_smoke_test
+
+    PRIVATE
+        compiler_core
+)
+
+# ============================================================
+# TESTE DO GERENCIADOR DE ESCOPOS
+# ============================================================
+
+add_executable(scope_manager_test
+
+    tests/ScopeManagerTest.cpp
+)
+
+target_link_libraries(scope_manager_test
 
     PRIVATE
         compiler_core
