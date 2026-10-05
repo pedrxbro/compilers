@@ -33,12 +33,18 @@ add_library(compiler_core STATIC
 
     # Modelo semântico
     src/compiler/semantic/SemanticTypes.h
+
     src/compiler/semantic/Symbol.cpp
     src/compiler/semantic/Symbol.h
+
     src/compiler/semantic/Scope.cpp
     src/compiler/semantic/Scope.h
+
     src/compiler/semantic/ScopeManager.cpp
     src/compiler/semantic/ScopeManager.h
+
+    src/compiler/semantic/DeclarationProcessor.cpp
+    src/compiler/semantic/DeclarationProcessor.h
 
     # Código gerado pelo WebGALS
     generated/webgals/Constants.cpp
