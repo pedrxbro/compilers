@@ -24,18 +24,22 @@ Symbol::Symbol(
 {
     if (name_.empty())
     {
-        throw invalid_argument("Nome do símbolo não pode ser vazio");
+        throw invalid_argument(
+            "Nome do símbolo não pode ser vazio"
+            );
     }
 
     if (scope_.empty())
     {
-        throw invalid_argument("Escopo do símbolo não pode ser vazio");
+        throw invalid_argument(
+            "Escopo do símbolo não pode ser vazio"
+            );
     }
 
-    // Validações específicas para vetor
     if (kind_ == SymbolKind::Vector)
     {
-        if (!vectorSize_.has_value() || vectorSize_.value() == 0)
+        if (!vectorSize_.has_value() ||
+            vectorSize_.value() == 0)
         {
             throw invalid_argument(
                 "Símbolo do vetor deve ter um tamanho válido"
@@ -50,7 +54,6 @@ Symbol::Symbol(
         }
     }
 
-    // Validações específicas para parâmetro
     if (kind_ == SymbolKind::Parameter)
     {
         if (!parameterPosition_.has_value() ||
@@ -61,16 +64,15 @@ Symbol::Symbol(
                 );
         }
 
-        if (vectorSize_.has_value())
+        if (vectorSize_.has_value() &&
+            vectorSize_.value() == 0)
         {
             throw invalid_argument(
-                "Símbolo do parâmetro não pode ter tamanho de vetor"
+                "Parâmetro vetor deve possuir tamanho válido"
                 );
         }
     }
 
-    // Variável e função não podem possuir informações
-    // específicas de vetor ou parâmetro
     if (kind_ == SymbolKind::Variable ||
         kind_ == SymbolKind::Function)
     {
@@ -90,7 +92,7 @@ Symbol::Symbol(
     }
 }
 
-const string& Symbol::name() const
+const string &Symbol::name() const
 {
     return name_;
 }
@@ -105,7 +107,7 @@ SymbolKind Symbol::kind() const
     return kind_;
 }
 
-const string& Symbol::scope() const
+const string &Symbol::scope() const
 {
     return scope_;
 }
