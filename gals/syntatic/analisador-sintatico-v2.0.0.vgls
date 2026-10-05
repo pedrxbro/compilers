@@ -1,3 +1,4 @@
+%%%VERSION 2%%%
 #Options
 GenerateScanner = true
 GenerateParser = true
@@ -176,58 +177,77 @@ FIMPROCEDIMENTO = IDENTIFICADOR : "fimprocedimento"
 <op_multiplicativo>
 <op_unario>
 #Grammar
-<programa> ::= PROGRAMA IDENTIFICADOR <lista_subrotinas>INICIO <lista_comandos> FIM;
+<programa> ::= PROGRAMA IDENTIFICADOR <lista_subrotinas>INICIO <lista_comandos> FIM #48;
 <lista_comandos> ::= <comando> <lista_comandos> | î;
 <lista_subrotinas> ::= <definicao_subrotina> <lista_subrotinas> | î;
 <definicao_subrotina> ::= <definicao_procedimento> | <definicao_funcao>;
-<definicao_procedimento> ::= PROCEDIMENTO IDENTIFICADOR ABRE_PARENTESE <parametros_formais_opcionais> FECHA_PARENTESE INICIO <lista_comandos> FIMPROCEDIMENTO;
-<definicao_funcao> ::= FUNCAO <tipo> IDENTIFICADOR ABRE_PARENTESE <parametros_formais_opcionais> FECHA_PARENTESE INICIO <lista_comandos> <retorno> FIMFUNCAO;
-<retorno> ::= RETORNE <expressao> PONTO_VIRGULA;
+<definicao_procedimento> ::= PROCEDIMENTO IDENTIFICADOR #29 ABRE_PARENTESE <parametros_formais_opcionais> FECHA_PARENTESE INICIO <lista_comandos> FIMPROCEDIMENTO #32;
+<definicao_funcao> ::= FUNCAO <tipo> IDENTIFICADOR #30 ABRE_PARENTESE <parametros_formais_opcionais> FECHA_PARENTESE INICIO <lista_comandos> <retorno> FIMFUNCAO #32;
+<retorno> ::= RETORNE <expressao> #31 PONTO_VIRGULA;
 <parametros_formais_opcionais> ::= <lista_parametros_formais> | î;
 <lista_parametros_formais> ::= <parametro_formal> <resto_parametros_formais>;
 <resto_parametros_formais> ::= VIRGULA <parametro_formal> <resto_parametros_formais> | î;
-<parametro_formal> ::= <tipo> <item_declaracao>;
+<parametro_formal> ::= <tipo> #28 <item_declaracao>;
 <argumentos_opcionais> ::= <lista_argumentos> | î;
-<lista_argumentos> ::= <expressao> <resto_argumentos>;
-<resto_argumentos> ::= VIRGULA <expressao> <resto_argumentos> | î;
+<lista_argumentos> ::= <expressao> #34 <resto_argumentos>;
+<resto_argumentos> ::= VIRGULA <expressao> #34 <resto_argumentos> | î;
 <comando> ::= <declaracao> | <atribuicao> | <entrada> | <saida> | <condicional> | <laco_repeticao> | <chamada_procedimento>;
-<declaracao> ::= <tipo> <lista_identificadores> PONTO_VIRGULA;
-<tipo> ::= INTEIRO | FLUTUANTE | TEXTO | LOGICO | CARACTERE;
+<declaracao> ::= <tipo> #23 <lista_identificadores> PONTO_VIRGULA;
+<tipo> ::= INTEIRO #1
+         | FLUTUANTE #1
+         | TEXTO #1
+         | LOGICO #1
+         | CARACTERE #1;
 <lista_identificadores> ::= <item_declaracao> <resto_lista_identificadores>;
 <resto_lista_identificadores> ::= VIRGULA <item_declaracao> <resto_lista_identificadores> | î;
-<chamada_subrotina> ::= IDENTIFICADOR ABRE_PARENTESE <argumentos_opcionais> FECHA_PARENTESE;
-<chamada_procedimento> ::= <chamada_subrotina> PONTO_VIRGULA;
-<chamada_funcao> ::= <chamada_subrotina>;
-<item_declaracao> ::= <identificador_simples> | <vetor>;
-<identificador_simples> ::= IDENTIFICADOR;
-<vetor> ::= <identificador_simples> ABRE_COLCHETE <tamanho_vetor> FECHA_COLCHETE;
-<tamanho_vetor> ::= INTEIRO_DECIMAL | INTEIRO_BINARIO | INTEIRO_HEXADECIMAL;
-<atribuicao> ::= <destino_atribuicao> RECEBE <expressao> PONTO_VIRGULA;
-<destino_atribuicao> ::= IDENTIFICADOR | <posicao_vetor>;
-<posicao_vetor> ::= IDENTIFICADOR ABRE_COLCHETE <expressao> FECHA_COLCHETE;
-<entrada> ::= LEIA ABRE_PARENTESE <destino_atribuicao> FECHA_PARENTESE PONTO_VIRGULA;
+<chamada_subrotina> ::= IDENTIFICADOR #33 ABRE_PARENTESE <argumentos_opcionais> FECHA_PARENTESE #35;
+<chamada_procedimento> ::= <chamada_subrotina> PONTO_VIRGULA #36;
+<chamada_funcao> ::= <chamada_subrotina> #37;
+<item_declaracao> ::= <identificador_simples> #25 | <vetor>;
+<identificador_simples> ::= IDENTIFICADOR #24;
+<vetor> ::= <identificador_simples> ABRE_COLCHETE <tamanho_vetor> FECHA_COLCHETE #27;
+<tamanho_vetor> ::= INTEIRO_DECIMAL #26
+                  | INTEIRO_BINARIO #26
+                  | INTEIRO_HEXADECIMAL #26;
+<atribuicao> ::= <destino_atribuicao> #40 RECEBE <expressao> #41 PONTO_VIRGULA;
+<destino_atribuicao> ::= IDENTIFICADOR #38 | <posicao_vetor>;
+<posicao_vetor> ::= IDENTIFICADOR #38 ABRE_COLCHETE <expressao> #39 FECHA_COLCHETE;
+<entrada> ::= LEIA ABRE_PARENTESE <destino_atribuicao> #42 FECHA_PARENTESE PONTO_VIRGULA;
 <saida> ::= MOSTRE ABRE_PARENTESE <item_saida> FECHA_PARENTESE PONTO_VIRGULA;
-<item_saida> ::= <destino_atribuicao> | <literal>;
-<literal> ::= INTEIRO_DECIMAL| INTEIRO_BINARIO| INTEIRO_HEXADECIMAL| FLUTUANTE_LITERAL| CARACTERE_LITERAL| TEXTO_LITERAL| VERDADEIRO| FALSO | NULO; 
-<condicional> ::= SE <expressao> ENTAO <lista_comandos> <senao_opcional> FIMSE;
-<senao_opcional> ::= SENAO <lista_comandos>| î ;
-<laco_repeticao> ::= <laco_pre_testado>| <laco_controle> | <laco_pos_testado>;
-<laco_pre_testado> ::= ENQUANTO <expressao> FACA <lista_comandos> FIMENQUANTO;
-<laco_controle> ::= PARA <operacao_controle> ATE <expressao> PASSO <operacao_controle> FACA <lista_comandos> FIMPARA;
+<item_saida> ::= <destino_atribuicao> #43 | <literal>;
+<literal> ::= INTEIRO_DECIMAL #2
+            | INTEIRO_BINARIO #2
+            | INTEIRO_HEXADECIMAL #2
+            | FLUTUANTE_LITERAL #3
+            | CARACTERE_LITERAL #4
+            | TEXTO_LITERAL #5
+            | VERDADEIRO #6
+            | FALSO #6
+            | NULO #7;
+<condicional> ::= SE <expressao> #45 ENTAO #46 <lista_comandos> #47 <senao_opcional> FIMSE;
+<senao_opcional> ::= SENAO #46 <lista_comandos> #47 | î;
+<laco_repeticao> ::= <laco_pre_testado> | <laco_controle> | <laco_pos_testado>;
+<laco_pre_testado> ::= ENQUANTO <expressao> #45 FACA #46 <lista_comandos> #47 FIMENQUANTO;
+<laco_controle> ::= PARA #46 <operacao_controle> ATE <expressao> PASSO <operacao_controle> FACA <lista_comandos> #47 FIMPARA;
 <operacao_controle> ::= <identificador_simples> RECEBE <expressao>;
-<laco_pos_testado> ::= FACA <lista_comandos> ATE <expressao> PONTO_VIRGULA;
+<laco_pos_testado> ::= FACA #46 <lista_comandos> ATE <expressao> #45 #47 PONTO_VIRGULA;
 <expressao> ::= <expressao_ou>;
-<expressao_ou> ::= <expressao_ou> OU_LOGICO <expressao_e>| <expressao_e>;
-<expressao_e> ::= <expressao_e> E_LOGICO <expressao_igualdade>| <expressao_igualdade>;
-<expressao_igualdade> ::= <expressao_igualdade> <op_igualdade> <expressao_relacional> | <expressao_relacional>;
-<expressao_relacional> ::= <expressao_relacional> <op_relacional> <expressao_aditiva> | <expressao_aditiva>;
-<expressao_aditiva> ::= <expressao_aditiva> <op_aditivo> <expressao_multiplicativa>| <expressao_multiplicativa>;
-<expressao_multiplicativa> ::= <expressao_multiplicativa> <op_multiplicativo> <expressao_unaria>| <expressao_unaria>;
-<expressao_unaria> ::= <op_unario> <expressao_unaria>| <expressao_primaria>;
-<expressao_primaria> ::= <operando> | <chamada_funcao> | ABRE_PARENTESE <expressao> FECHA_PARENTESE;
-<operando> ::= IDENTIFICADOR | <posicao_vetor> | <literal>;
-<op_igualdade> ::= IGUAL| DIFERENTE;
-<op_relacional> ::= MAIOR_QUE| MENOR_QUE| MAIOR_IGUAL_QUE| MENOR_IGUAL_QUE;
-<op_aditivo> ::= MAIS| MENOS;
-<op_multiplicativo> ::= VEZES| DIVIDO| RESTO;
-<op_unario> ::= MENOS| NAO_LOGICO;
+<expressao_ou> ::= <expressao_ou> OU_LOGICO #12 <expressao_e> #21 | <expressao_e>;
+<expressao_e> ::= <expressao_e> E_LOGICO #13 <expressao_igualdade> #20 | <expressao_igualdade>;
+<expressao_igualdade> ::= <expressao_igualdade> <op_igualdade> <expressao_relacional> #19 | <expressao_relacional>;
+<expressao_relacional> ::= <expressao_relacional> <op_relacional> <expressao_aditiva> #18 | <expressao_aditiva>;
+<expressao_aditiva> ::= <expressao_aditiva> <op_aditivo> <expressao_multiplicativa> #17 | <expressao_multiplicativa>;
+<expressao_multiplicativa> ::= <expressao_multiplicativa> <op_multiplicativo> <expressao_unaria> #16 | <expressao_unaria>;
+<expressao_unaria> ::= <op_unario> <expressao_unaria> #22 | <expressao_primaria>;
+<expressao_primaria> ::= <operando> #44 | <chamada_funcao> | ABRE_PARENTESE <expressao> FECHA_PARENTESE;
+<operando> ::= IDENTIFICADOR #38 | <posicao_vetor> | <literal>;
+<op_igualdade> ::= IGUAL #11 | DIFERENTE #11;
+<op_relacional> ::= MAIOR_QUE #10
+                  | MENOR_QUE #10
+                  | MAIOR_IGUAL_QUE #10
+                  | MENOR_IGUAL_QUE #10;
+<op_aditivo> ::= MAIS #8 | MENOS #8;
+<op_multiplicativo> ::= VEZES #9 | DIVIDO #9 | RESTO #9;
+<op_unario> ::= MENOS #14 | NAO_LOGICO #15;
+#SimulatorText
+cHJvZ3JhbWEgdGVzdGUKaW5pY2lvCmludGVpcm8geDsKCnggcmVjZWJlIDEwOwoKc2UgeCBtYWlvclF1ZSA1IGVudGFvCm1vc3RyZSh4KTsKZmltc2UKCmZpbQ==
