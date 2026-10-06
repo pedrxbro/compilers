@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 using namespace std;
 
@@ -61,11 +62,18 @@ public:
         const string &name
         ) const;
 
+    vector<const Symbol *> allSymbols() const;
+
 private:
     Scope &createChildScope(
         const string &name,
         ScopeKind kind
         );
+
+    void collectSymbols(
+        const Scope &scope,
+        vector<const Symbol *> &result
+        ) const;
 
     unique_ptr<Scope> globalScope_;
     Scope *currentScope_;

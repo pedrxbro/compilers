@@ -6,6 +6,10 @@
 
 #include "DeclarationProcessor.h"
 
+#include <optional>
+#include <string>
+#include <vector>
+
 class Semantico
 {
 public:
@@ -16,8 +20,65 @@ public:
 
     const ScopeManager &scopeManager() const;
 
+    std::vector<std::string> warnings() const;
+
 private:
+    struct IdentifierReference
+    {
+        Symbol *symbol;
+        std::string name;
+        int position;
+    };
+
+    Symbol *resolveIdentifier(
+        const std::string &name,
+        int position
+        );
+
+    void captureIdentifierReference(
+        const std::string &name,
+        int position
+        );
+
+    IdentifierReference popIdentifierReference(
+        int position
+        );
+
+    void markReferenceUsed(
+        const IdentifierReference &reference
+        );
+
+    void usePendingIdentifier(
+        int position
+        );
+
+    void useIdentifierImmediately(
+        const std::string &name,
+        int position
+        );
+
+    void captureAssignmentTarget(
+        int position
+        );
+
+    void completeAssignment(
+        int position
+        );
+
+    void initializeInputTarget(
+        int position
+        );
+
     DeclarationProcessor declarationProcessor_;
+
+    std::vector<IdentifierReference>
+        pendingIdentifierReferences_;
+
+    std::optional<IdentifierReference>
+        assignmentTarget_;
+
+    std::vector<std::string>
+        warnings_;
 };
 
 #endif

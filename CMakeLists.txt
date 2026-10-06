@@ -51,6 +51,19 @@ add_library(compiler_core STATIC
     generated/webgals/Lexico.cpp
     generated/webgals/Sintatico.cpp
     generated/webgals/Semantico.cpp
+
+    generated/webgals/Constants.cpp
+    generated/webgals/Constants.h
+    generated/webgals/Lexico.cpp
+    generated/webgals/Lexico.h
+    generated/webgals/Semantico.cpp
+    generated/webgals/Semantico.h
+    generated/webgals/Sintatico.cpp
+    generated/webgals/Sintatico.h
+    generated/webgals/Token.h
+    generated/webgals/LexicalError.h
+    generated/webgals/SyntacticError.h
+    generated/webgals/SemanticError.h
 )
 
 # ============================================================

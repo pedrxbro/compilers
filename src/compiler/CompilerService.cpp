@@ -8,6 +8,9 @@
 #include "SyntacticError.h"
 #include "SemanticError.h"
 
+#include <string>
+#include <vector>
+
 AnalysisResult CompilerService::analyze(
     const std::string &source
     ) const
@@ -26,9 +29,22 @@ AnalysisResult CompilerService::analyze(
             &semantico
             );
 
+        std::string message =
+            "Analise sintatica e semantica concluida com sucesso.";
+
+        const std::vector<std::string> warnings =
+            semantico.warnings();
+
+        for (const std::string &warning : warnings)
+        {
+            message +=
+                "\nAviso semantico: " +
+                warning;
+        }
+
         return {
             true,
-            "Analise sintatica e semantica concluida com sucesso.",
+            message,
             -1
         };
     }

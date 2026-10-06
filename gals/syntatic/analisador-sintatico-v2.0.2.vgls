@@ -229,7 +229,7 @@ FIMPROCEDIMENTO = IDENTIFICADOR : "fimprocedimento"
 <laco_repeticao> ::= <laco_pre_testado> | <laco_controle> | <laco_pos_testado>;
 <laco_pre_testado> ::= ENQUANTO <expressao> #45 FACA #46 <lista_comandos> #47 FIMENQUANTO;
 <laco_controle> ::= PARA #46 <operacao_controle> ATE <expressao> PASSO <operacao_controle> FACA <lista_comandos> #47 FIMPARA;
-<operacao_controle> ::= <identificador_simples> RECEBE <expressao>;
+<operacao_controle> ::= IDENTIFICADOR #38 #40 RECEBE <expressao> #41;
 <laco_pos_testado> ::= FACA #46 <lista_comandos> ATE <expressao> #45 #47 PONTO_VIRGULA;
 <expressao> ::= <expressao_ou>;
 <expressao_ou> ::= <expressao_ou> OU_LOGICO #12 <expressao_e> #21 | <expressao_e>;
@@ -239,8 +239,13 @@ FIMPROCEDIMENTO = IDENTIFICADOR : "fimprocedimento"
 <expressao_aditiva> ::= <expressao_aditiva> <op_aditivo> <expressao_multiplicativa> #17 | <expressao_multiplicativa>;
 <expressao_multiplicativa> ::= <expressao_multiplicativa> <op_multiplicativo> <expressao_unaria> #16 | <expressao_unaria>;
 <expressao_unaria> ::= <op_unario> <expressao_unaria> #22 | <expressao_primaria>;
-<expressao_primaria> ::= <operando> #44 | <chamada_funcao> | ABRE_PARENTESE <expressao> FECHA_PARENTESE;
-<operando> ::= IDENTIFICADOR #38 | <posicao_vetor> | <literal>;
+<expressao_primaria> ::= <operando>
+                       | <chamada_funcao>
+                       | ABRE_PARENTESE <expressao> FECHA_PARENTESE;
+
+<operando> ::= IDENTIFICADOR #38 #44
+             | <posicao_vetor> #44
+             | <literal>;
 <op_igualdade> ::= IGUAL #11 | DIFERENTE #11;
 <op_relacional> ::= MAIOR_QUE #10
                   | MENOR_QUE #10
