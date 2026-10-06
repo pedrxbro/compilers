@@ -34,6 +34,9 @@ add_library(compiler_core STATIC
     # Modelo semântico
     src/compiler/semantic/SemanticTypes.h
 
+    src/compiler/semantic/SemanticTable.cpp
+    src/compiler/semantic/SemanticTable.h
+
     src/compiler/semantic/Symbol.cpp
     src/compiler/semantic/Symbol.h
 
@@ -48,18 +51,17 @@ add_library(compiler_core STATIC
 
     # Código gerado pelo WebGALS
     generated/webgals/Constants.cpp
-    generated/webgals/Lexico.cpp
-    generated/webgals/Sintatico.cpp
-    generated/webgals/Semantico.cpp
-
-    generated/webgals/Constants.cpp
     generated/webgals/Constants.h
+
     generated/webgals/Lexico.cpp
     generated/webgals/Lexico.h
+
     generated/webgals/Semantico.cpp
     generated/webgals/Semantico.h
+
     generated/webgals/Sintatico.cpp
     generated/webgals/Sintatico.h
+
     generated/webgals/Token.h
     generated/webgals/LexicalError.h
     generated/webgals/SyntacticError.h
@@ -209,6 +211,21 @@ add_executable(scope_manager_test
 )
 
 target_link_libraries(scope_manager_test
+
+    PRIVATE
+        compiler_core
+)
+
+# ============================================================
+# TESTE DO SISTEMA DE TIPOS
+# ============================================================
+
+add_executable(type_system_test
+
+    tests/TypeSystemTest.cpp
+)
+
+target_link_libraries(type_system_test
 
     PRIVATE
         compiler_core
