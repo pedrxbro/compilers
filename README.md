@@ -9,123 +9,322 @@ Projeto desenvolvido para a disciplina de **Compiladores** do curso de **Ciênci
 
 ## Sobre o projeto
 
-Este projeto implementa uma IDE simples para realizar a análise léxica e sintática de uma linguagem desenvolvida durante a disciplina de Compiladores.
+Este projeto implementa uma IDE para análise léxica, sintática e semântica de uma linguagem desenvolvida durante a disciplina de Compiladores.
 
-Os analisadores léxico e sintático foram gerados utilizando o **WebGALS** e integrados a uma aplicação desktop desenvolvida em **C++ com Qt**.
+Os analisadores foram construídos com auxílio do **WebGALS** e integrados a uma aplicação desktop desenvolvida em **C++ com Qt Widgets**.
 
-O fluxo principal da aplicação é:
+Atualmente o projeto contempla as funcionalidades desenvolvidas até a **M2.1**, incluindo:
 
-Editor de código-fonte  
-→ MainWindow  
-→ CompilerService  
-→ Analisador Léxico  
-→ Analisador Sintático  
-→ Resultado da análise  
-→ Área de mensagens
+- análise léxica;
+- análise sintática;
+- ações semânticas;
+- tabela de símbolos;
+- controle de escopos;
+- verificação de declaração e visibilidade de identificadores;
+- verificação de unicidade;
+- controle de uso e inicialização;
+- sistema de compatibilidade de tipos;
+- visualização da tabela de símbolos na IDE.
 
-## Funcionalidades
+## Fluxo da aplicação
+
+O fluxo principal da compilação é:
+
+    Código-fonte
+        ↓
+    MainWindow
+        ↓
+    CompilerService
+        ↓
+    Lexico
+        ↓
+    Sintatico
+        ↓
+    Ações semânticas
+        ↓
+    Semantico
+        ↓
+    Tabela de símbolos
+        ↓
+    Escopos
+        ↓
+    Sistema de tipos
+        ↓
+    AnalysisResult
+        ↓
+    MainWindow
+        ↓
+    Mensagens e tabela de símbolos
+
+A interface gráfica não acessa diretamente os componentes internos do compilador.
+
+Toda a execução da análise é centralizada no `CompilerService`.
+
+## Funcionalidades da IDE
 
 A IDE possui:
 
 - editor de código-fonte;
 - fonte tamanho 14 no editor;
-- botão para realizar a análise sintática;
-- integração com o analisador léxico gerado pelo WebGALS;
-- integração com o analisador sintático gerado pelo WebGALS;
+- botão para compilar o programa;
+- área de mensagens e depuração;
+- fonte tamanho 14 na área de mensagens;
 - exibição de erros léxicos;
 - exibição de erros sintáticos;
-- indicação da posição do erro;
-- mensagem de sucesso para programas sintaticamente válidos;
-- área para mensagens e depuração;
-- fonte tamanho 14 na área de mensagens.
+- exibição de erros semânticos;
+- exibição de avisos semânticos;
+- indicação da posição do erro quando disponível;
+- tabela visual de símbolos.
+
+A tabela de símbolos apresenta:
+
+- nome;
+- tipo;
+- modalidade;
+- escopo;
+- estado de inicialização;
+- estado de uso.
+
+## Análise semântica
+
+A M2.1 acrescenta ações semânticas à gramática utilizada pelo WebGALS.
+
+O analisador realiza as seguintes verificações:
+
+- inserção dos identificadores na tabela de símbolos;
+- armazenamento do tipo do identificador;
+- armazenamento da modalidade;
+- armazenamento do escopo;
+- declaração antes do uso;
+- visibilidade entre escopos;
+- unicidade dentro do mesmo escopo;
+- aviso de identificadores declarados e não utilizados;
+- aviso de identificadores utilizados antes da inicialização;
+- compatibilidade de tipos nas expressões;
+- compatibilidade de tipos nas atribuições.
+
+## Identificadores
+
+A tabela de símbolos trabalha com as seguintes modalidades:
+
+- variável;
+- vetor;
+- parâmetro;
+- função.
+
+Procedimentos também são representados como sub-rotinas na tabela, utilizando tipo de retorno `void`.
+
+## Escopos
+
+Os escopos são organizados hierarquicamente.
+
+A estrutura básica é:
+
+    global
+        ├── função/procedimento
+        │       └── blocos internos
+        │
+        └── blocos internos do programa principal
+
+A busca de identificadores ocorre a partir do escopo atual em direção aos seus escopos pais.
+
+Dessa forma:
+
+- identificadores do escopo pai podem ser utilizados pelos filhos;
+- identificadores de blocos internos não vazam para o escopo pai;
+- identificadores de escopos irmãos não são visíveis entre si;
+- o mesmo nome pode existir em escopos diferentes;
+- o mesmo nome não pode ser declarado duas vezes no mesmo escopo.
+
+## Sistema de tipos
+
+Os tipos suportados semanticamente são:
+
+- `INTEIRO`;
+- `FLUTUANTE`;
+- `TEXTO`;
+- `LOGICO`;
+- `CARACTERE`.
+
+Também existem internamente os tipos:
+
+- `VOID`;
+- `UNKNOWN`.
+
+O sistema de tipos verifica operações aritméticas, relacionais e lógicas, além da compatibilidade das atribuições.
+
+Conversões potencialmente perigosas podem produzir avisos semânticos sem impedir a compilação.
 
 ## Estrutura do projeto
 
     gals/
     ├── lexical/
     │   └── analisador-lexico.gals
+    │
     └── syntatic/
-        └── analisador-sintatico.gals
+        └── analisador-sintatico-v2.0.2.vgls
 
     generated/
     └── webgals/
-        ├── Lexico.cpp
-        ├── Lexico.h
-        ├── Sintatico.cpp
-        ├── Sintatico.h
-        ├── Semantico.cpp
-        ├── Semantico.h
+        ├── AnalysisError.h
         ├── Constants.cpp
         ├── Constants.h
-        └── demais arquivos gerados pelo WebGALS
+        ├── LexicalError.h
+        ├── Lexico.cpp
+        ├── Lexico.h
+        ├── SemanticError.h
+        ├── Semantico.cpp
+        ├── Semantico.h
+        ├── Sintatico.cpp
+        ├── Sintatico.h
+        ├── SyntacticError.h
+        └── Token.h
 
     src/
     ├── compiler/
     │   ├── AnalysisResult.h
     │   ├── CompilerService.cpp
-    │   └── CompilerService.h
+    │   ├── CompilerService.h
+    │   │
+    │   └── semantic/
+    │       ├── DeclarationProcessor.cpp
+    │       ├── DeclarationProcessor.h
+    │       ├── Scope.cpp
+    │       ├── Scope.h
+    │       ├── ScopeManager.cpp
+    │       ├── ScopeManager.h
+    │       ├── SemanticTable.cpp
+    │       ├── SemanticTable.h
+    │       ├── SemanticTypes.h
+    │       ├── Symbol.cpp
+    │       └── Symbol.h
+    │
     ├── ui/
     │   ├── MainWindow.cpp
     │   ├── MainWindow.h
     │   └── MainWindow.ui
+    │
     └── main.cpp
 
     tests/
-    └── CompilerServiceSmokeTest.cpp
+    ├── CompilerServiceSmokeTest.cpp
+    ├── ScopeManagerTest.cpp
+    ├── SemanticIntegrationTest.cpp
+    └── TypeSystemTest.cpp
 
-## Organização
+## Organização das camadas
 
-### gals
+### `gals`
 
-Contém os arquivos utilizados no WebGALS para definição dos analisadores da linguagem.
+Contém os projetos utilizados no WebGALS.
 
-### generated/webgals
+O arquivo utilizado para a versão sintática e semântica atual é:
 
-Contém os arquivos C++ gerados automaticamente pelo WebGALS.
+    gals/syntatic/analisador-sintatico-v2.0.2.vgls
 
-Esses arquivos representam o núcleo dos analisadores léxico e sintático e não devem ser alterados manualmente.
+Esse projeto contém a gramática e as ações semânticas utilizadas para gerar o analisador integrado à aplicação.
 
-### src/compiler
+### `generated/webgals`
 
-Contém a camada responsável pela comunicação entre a aplicação e os analisadores gerados pelo WebGALS.
+Contém as classes produzidas a partir do projeto WebGALS.
+
+Os arquivos `Semantico.cpp` e `Semantico.h` contêm atualmente a implementação das ações semânticas utilizadas pela M2.1.
+
+Por esse motivo, uma nova geração pelo WebGALS deve ser feita com cuidado para que a implementação semântica existente não seja perdida.
+
+### `src/compiler`
+
+Contém a camada responsável por integrar a aplicação aos analisadores.
 
 Os principais componentes são:
 
-- `CompilerService`: executa a análise do código-fonte;
-- `AnalysisResult`: representa o resultado da análise.
+- `CompilerService`: coordena as análises;
+- `AnalysisResult`: transporta resultado, erros, avisos e tabela de símbolos.
 
-### src/ui
+### `src/compiler/semantic`
 
-Contém a interface gráfica da aplicação desenvolvida utilizando Qt Widgets.
+Contém a infraestrutura semântica da aplicação.
+
+Principais componentes:
+
+- `Symbol`: representa um identificador;
+- `Scope`: representa um escopo;
+- `ScopeManager`: gerencia a árvore de escopos e visibilidade;
+- `DeclarationProcessor`: processa declarações produzidas pelas ações semânticas;
+- `SemanticTable`: implementa as regras de compatibilidade de tipos;
+- `SemanticTypes`: define os tipos e modalidades utilizados pela análise.
+
+### `src/ui`
+
+Contém a interface gráfica desenvolvida com Qt Widgets.
 
 A `MainWindow` é responsável por:
 
-- obter o código digitado pelo usuário;
-- enviar o código ao `CompilerService`;
-- receber o resultado da análise;
-- apresentar as mensagens ao usuário.
+- obter o código-fonte;
+- executar o `CompilerService`;
+- exibir mensagens;
+- exibir a tabela de símbolos.
 
-## Arquitetura
+## Testes
 
-A aplicação segue o seguinte fluxo:
+O projeto possui testes para diferentes partes do compilador.
 
-    Editor
-       ↓
-    MainWindow
-       ↓
-    CompilerService
-       ↓
-    Lexico
-       ↓
-    Sintatico
-       ↓
-    AnalysisResult
-       ↓
-    Área de mensagens
+### CompilerServiceSmokeTest
 
-A interface gráfica não acessa diretamente os analisadores gerados pelo WebGALS.
+Exercita o fluxo geral do compilador com programas válidos e inválidos.
 
-Toda a comunicação com o analisador léxico e o analisador sintático é centralizada no `CompilerService`.
+### ScopeManagerTest
+
+Valida:
+
+- escopo global;
+- escopos de funções;
+- escopos internos;
+- visibilidade;
+- sombreamento;
+- unicidade;
+- prevenção de vazamento entre escopos.
+
+### TypeSystemTest
+
+Valida:
+
+- operações entre tipos;
+- operações incompatíveis;
+- conversões;
+- atribuições;
+- operadores unários;
+- expressões compostas;
+- condições lógicas.
+
+### SemanticIntegrationTest
+
+Valida a integração dos requisitos da M2.1, incluindo:
+
+- declarações;
+- unicidade;
+- escopos;
+- inicialização;
+- utilização;
+- vetores;
+- parâmetros;
+- funções;
+- expressões;
+- atribuições.
+
+## Build
+
+O projeto utiliza:
+
+- C++17;
+- CMake;
+- Qt 5 ou Qt 6 Widgets.
+
+O `CMakeLists.txt` cria:
+
+- a biblioteca `compiler_core`;
+- o executável gráfico `compiler`;
+- os executáveis de testes quando `BUILD_TESTING` está habilitado.
 
 ## Tecnologias utilizadas
 
@@ -134,6 +333,7 @@ Toda a comunicação com o analisador léxico e o analisador sintático é centr
 - Qt Widgets
 - WebGALS
 - Analisador Sintático SLR
+- CTest
 
 ## Instituição
 
