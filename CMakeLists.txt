@@ -187,49 +187,94 @@ install(
 )
 
 # ============================================================
-# TESTE DO COMPILER SERVICE
+# TESTES
 # ============================================================
 
-add_executable(compiler_service_smoke_test
+include(CTest)
 
-    tests/CompilerServiceSmokeTest.cpp
-)
+if(BUILD_TESTING)
 
-target_link_libraries(compiler_service_smoke_test
+    # ========================================================
+    # TESTE DO COMPILER SERVICE
+    # ========================================================
 
-    PRIVATE
-        compiler_core
-)
+    add_executable(compiler_service_smoke_test
 
-# ============================================================
-# TESTE DO GERENCIADOR DE ESCOPOS
-# ============================================================
+        tests/CompilerServiceSmokeTest.cpp
+    )
 
-add_executable(scope_manager_test
+    target_link_libraries(compiler_service_smoke_test
 
-    tests/ScopeManagerTest.cpp
-)
+        PRIVATE
+            compiler_core
+    )
 
-target_link_libraries(scope_manager_test
+    add_test(
+        NAME compiler_service_smoke_test
+        COMMAND compiler_service_smoke_test
+    )
 
-    PRIVATE
-        compiler_core
-)
+    # ========================================================
+    # TESTE DO GERENCIADOR DE ESCOPOS
+    # ========================================================
 
-# ============================================================
-# TESTE DO SISTEMA DE TIPOS
-# ============================================================
+    add_executable(scope_manager_test
 
-add_executable(type_system_test
+        tests/ScopeManagerTest.cpp
+    )
 
-    tests/TypeSystemTest.cpp
-)
+    target_link_libraries(scope_manager_test
 
-target_link_libraries(type_system_test
+        PRIVATE
+            compiler_core
+    )
 
-    PRIVATE
-        compiler_core
-)
+    add_test(
+        NAME scope_manager_test
+        COMMAND scope_manager_test
+    )
+
+    # ========================================================
+    # TESTE DO SISTEMA DE TIPOS
+    # ========================================================
+
+    add_executable(type_system_test
+
+        tests/TypeSystemTest.cpp
+    )
+
+    target_link_libraries(type_system_test
+
+        PRIVATE
+            compiler_core
+    )
+
+    add_test(
+        NAME type_system_test
+        COMMAND type_system_test
+    )
+
+    # ========================================================
+    # TESTES DE INTEGRAÇÃO SEMÂNTICA DA M2.1
+    # ========================================================
+
+    add_executable(semantic_integration_test
+
+        tests/SemanticIntegrationTest.cpp
+    )
+
+    target_link_libraries(semantic_integration_test
+
+        PRIVATE
+            compiler_core
+    )
+
+    add_test(
+        NAME semantic_integration_test
+        COMMAND semantic_integration_test
+    )
+
+endif()
 
 # ============================================================
 # FINALIZAÇÃO QT 6
