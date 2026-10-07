@@ -1,3 +1,4 @@
+
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
@@ -20,4 +21,5 @@ public:
 private:
     Ui::MainWindow *ui;
 };
+
 #endif // MAINWINDOW_H
