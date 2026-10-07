@@ -11,6 +11,12 @@
 #include <string>
 #include <vector>
 
+struct SemanticDiagnostic
+{
+    std::string message;
+    int position = -1;
+};
+
 class Semantico
 {
 public:
@@ -21,7 +27,7 @@ public:
 
     const ScopeManager &scopeManager() const;
 
-    std::vector<std::string> warnings() const;
+    std::vector<SemanticDiagnostic> warnings() const;
 
 private:
     struct IdentifierReference
@@ -184,7 +190,7 @@ private:
 
     Symbol *currentSubroutine_ = nullptr;
 
-    std::vector<std::string>
+    std::vector<SemanticDiagnostic>
         warnings_;
 };
 

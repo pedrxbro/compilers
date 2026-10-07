@@ -381,9 +381,9 @@ const ScopeManager &Semantico::scopeManager() const
 }
 
 // Retorna os avisos semânticos acumulados.
-std::vector<std::string> Semantico::warnings() const
+std::vector<SemanticDiagnostic> Semantico::warnings() const
 {
-    std::vector<std::string> result =
+    std::vector<SemanticDiagnostic> result =
         warnings_;
 
     // Obtém todos os símbolos declarados na árvore de escopos.
@@ -425,11 +425,14 @@ std::vector<std::string> Semantico::warnings() const
         }
 
         result.push_back(
-            "Identificador '" +
-            symbol->name() +
-            "' declarado no escopo '" +
-            symbol->scope() +
-            "' e nunca usado."
+            {
+                "Identificador '" +
+                    symbol->name() +
+                    "' declarado no escopo '" +
+                    symbol->scope() +
+                    "' e nunca usado.",
+                -1
+            }
             );
     }
 
@@ -633,15 +636,14 @@ void Semantico::markReferenceUsed(
         !reference.symbol->isInitialized())
     {
         warnings_.push_back(
-            "Identificador '" +
-            reference.name +
-            "' usado antes da inicializacao no escopo '" +
-            reference.symbol->scope() +
-            "' (posicao " +
-            std::to_string(
+            {
+                "Identificador '" +
+                    reference.name +
+                    "' usado antes da inicializacao no escopo '" +
+                    reference.symbol->scope() +
+                    "'.",
                 reference.position
-                ) +
-            ")."
+            }
             );
     }
 
@@ -773,17 +775,20 @@ void Semantico::completeAssignment(
         CompatibilityResult::Warning)
     {
         warnings_.push_back(
-            "Atribuicao com conversao de " +
-            SemanticTable::typeName(
-                expressionType
-                ) +
-            " para " +
-            SemanticTable::typeName(
-                destinationType
-                ) +
-            " no identificador '" +
-            assignmentTarget_->name +
-            "' pode causar perda de dados."
+            {
+                "Atribuicao com conversao de " +
+                    SemanticTable::typeName(
+                        expressionType
+                        ) +
+                    " para " +
+                    SemanticTable::typeName(
+                        destinationType
+                        ) +
+                    " no identificador '" +
+                    assignmentTarget_->name +
+                    "' pode causar perda de dados.",
+                position
+            }
             );
     }
 
@@ -1369,17 +1374,20 @@ void Semantico::completeReturn(
         CompatibilityResult::Warning)
     {
         warnings_.push_back(
-            "Retorno da funcao '" +
-            currentSubroutine_->name() +
-            "' realiza conversao de " +
-            SemanticTable::typeName(
-                expressionType
-                ) +
-            " para " +
-            SemanticTable::typeName(
-                currentSubroutine_->type()
-                ) +
-            " e pode causar perda de dados."
+            {
+                "Retorno da funcao '" +
+                    currentSubroutine_->name() +
+                    "' realiza conversao de " +
+                    SemanticTable::typeName(
+                        expressionType
+                        ) +
+                    " para " +
+                    SemanticTable::typeName(
+                        currentSubroutine_->type()
+                        ) +
+                    " e pode causar perda de dados.",
+                position
+            }
             );
     }
 }
