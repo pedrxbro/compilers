@@ -31,11 +31,41 @@ add_library(compiler_core STATIC
     src/compiler/CompilerService.h
     src/compiler/AnalysisResult.h
 
+    # Modelo semântico
+    src/compiler/semantic/SemanticTypes.h
+
+    src/compiler/semantic/SemanticTable.cpp
+    src/compiler/semantic/SemanticTable.h
+
+    src/compiler/semantic/Symbol.cpp
+    src/compiler/semantic/Symbol.h
+
+    src/compiler/semantic/Scope.cpp
+    src/compiler/semantic/Scope.h
+
+    src/compiler/semantic/ScopeManager.cpp
+    src/compiler/semantic/ScopeManager.h
+
+    src/compiler/semantic/DeclarationProcessor.cpp
+    src/compiler/semantic/DeclarationProcessor.h
+
     # Código gerado pelo WebGALS
     generated/webgals/Constants.cpp
+    generated/webgals/Constants.h
+
     generated/webgals/Lexico.cpp
-    generated/webgals/Sintatico.cpp
+    generated/webgals/Lexico.h
+
     generated/webgals/Semantico.cpp
+    generated/webgals/Semantico.h
+
+    generated/webgals/Sintatico.cpp
+    generated/webgals/Sintatico.h
+
+    generated/webgals/Token.h
+    generated/webgals/LexicalError.h
+    generated/webgals/SyntacticError.h
+    generated/webgals/SemanticError.h
 )
 
 # ============================================================
@@ -46,6 +76,7 @@ target_include_directories(compiler_core
 
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src/compiler
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/compiler/semantic
 
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/generated/webgals
@@ -156,19 +187,94 @@ install(
 )
 
 # ============================================================
-# TESTE DO COMPILER SERVICE
+# TESTES
 # ============================================================
 
-add_executable(compiler_service_smoke_test
+include(CTest)
 
-    tests/CompilerServiceSmokeTest.cpp
-)
+if(BUILD_TESTING)
 
-target_link_libraries(compiler_service_smoke_test
+    # ========================================================
+    # TESTE DO COMPILER SERVICE
+    # ========================================================
 
-    PRIVATE
-        compiler_core
-)
+    add_executable(compiler_service_smoke_test
+
+        tests/CompilerServiceSmokeTest.cpp
+    )
+
+    target_link_libraries(compiler_service_smoke_test
+
+        PRIVATE
+            compiler_core
+    )
+
+    add_test(
+        NAME compiler_service_smoke_test
+        COMMAND compiler_service_smoke_test
+    )
+
+    # ========================================================
+    # TESTE DO GERENCIADOR DE ESCOPOS
+    # ========================================================
+
+    add_executable(scope_manager_test
+
+        tests/ScopeManagerTest.cpp
+    )
+
+    target_link_libraries(scope_manager_test
+
+        PRIVATE
+            compiler_core
+    )
+
+    add_test(
+        NAME scope_manager_test
+        COMMAND scope_manager_test
+    )
+
+    # ========================================================
+    # TESTE DO SISTEMA DE TIPOS
+    # ========================================================
+
+    add_executable(type_system_test
+
+        tests/TypeSystemTest.cpp
+    )
+
+    target_link_libraries(type_system_test
+
+        PRIVATE
+            compiler_core
+    )
+
+    add_test(
+        NAME type_system_test
+        COMMAND type_system_test
+    )
+
+    # ========================================================
+    # TESTES DE INTEGRAÇÃO SEMÂNTICA DA M2.1
+    # ========================================================
+
+    add_executable(semantic_integration_test
+
+        tests/SemanticIntegrationTest.cpp
+    )
+
+    target_link_libraries(semantic_integration_test
+
+        PRIVATE
+            compiler_core
+    )
+
+    add_test(
+        NAME semantic_integration_test
+        COMMAND semantic_integration_test
+    )
+
+endif()
 
 # ============================================================
 # FINALIZAÇÃO QT 6

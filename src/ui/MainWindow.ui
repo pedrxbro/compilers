@@ -54,6 +54,7 @@
 
       <item>
        <widget class="QLabel" name="editorLabel">
+
         <property name="font">
          <font>
           <pointsize>11</pointsize>
@@ -64,11 +65,13 @@
         <property name="text">
          <string>Editor de código</string>
         </property>
+
        </widget>
       </item>
 
       <item>
        <spacer name="headerSpacer">
+
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
@@ -79,6 +82,7 @@
           <height>20</height>
          </size>
         </property>
+
        </spacer>
       </item>
 
@@ -109,7 +113,7 @@
      </layout>
     </item>
 
-    <!-- Editor -->
+    <!-- Editor de código-fonte -->
     <item>
      <widget class="QPlainTextEdit" name="sourceEditor">
 
@@ -138,70 +142,258 @@
      </widget>
     </item>
 
-    <!-- Título da área de mensagens -->
+    <!-- Abas dos resultados da compilação -->
     <item>
-     <widget class="QLabel" name="messagesLabel">
-
-      <property name="font">
-       <font>
-        <pointsize>11</pointsize>
-        <bold>true</bold>
-       </font>
-      </property>
-
-      <property name="text">
-       <string>Mensagens e depuração</string>
-      </property>
-
-     </widget>
-    </item>
-
-    <!-- Área de mensagens -->
-    <item>
-     <widget class="QPlainTextEdit" name="messagesArea">
+     <widget class="QTabWidget" name="resultsTabs">
 
       <property name="minimumSize">
        <size>
         <width>0</width>
-        <height>140</height>
+        <height>210</height>
        </size>
       </property>
 
-      <property name="maximumSize">
-       <size>
-        <width>16777215</width>
-        <height>200</height>
-       </size>
+      <property name="currentIndex">
+       <number>0</number>
       </property>
 
-      <property name="font">
-       <font>
-        <family>Consolas</family>
-        <pointsize>14</pointsize>
-       </font>
-      </property>
+      <!-- Aba de mensagens -->
+      <widget class="QWidget" name="messagesTab">
 
-      <property name="placeholderText">
-       <string>As mensagens da compilação serão exibidas aqui.</string>
-      </property>
+       <attribute name="title">
+        <string>Mensagens e depuração</string>
+       </attribute>
 
-      <property name="undoRedoEnabled">
-       <bool>false</bool>
-      </property>
+       <layout class="QVBoxLayout" name="messagesTabLayout">
 
-      <property name="readOnly">
-       <bool>true</bool>
-      </property>
+        <property name="leftMargin">
+         <number>8</number>
+        </property>
 
-      <property name="lineWrapMode">
-       <enum>QPlainTextEdit::NoWrap</enum>
-      </property>
+        <property name="topMargin">
+         <number>8</number>
+        </property>
+
+        <property name="rightMargin">
+         <number>8</number>
+        </property>
+
+        <property name="bottomMargin">
+         <number>8</number>
+        </property>
+
+        <property name="spacing">
+         <number>6</number>
+        </property>
+
+        <item>
+         <widget class="QLabel" name="messagesLabel">
+
+          <property name="font">
+           <font>
+            <pointsize>11</pointsize>
+            <bold>true</bold>
+           </font>
+          </property>
+
+          <property name="text">
+           <string>Mensagens e depuração</string>
+          </property>
+
+         </widget>
+        </item>
+
+        <item>
+         <widget class="QPlainTextEdit" name="messagesArea">
+
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>140</height>
+           </size>
+          </property>
+
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>200</height>
+           </size>
+          </property>
+
+          <property name="font">
+           <font>
+            <family>Consolas</family>
+            <pointsize>14</pointsize>
+           </font>
+          </property>
+
+          <property name="placeholderText">
+           <string>As mensagens da compilação serão exibidas aqui.</string>
+          </property>
+
+          <property name="undoRedoEnabled">
+           <bool>false</bool>
+          </property>
+
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+
+          <property name="lineWrapMode">
+           <enum>QPlainTextEdit::NoWrap</enum>
+          </property>
+
+         </widget>
+        </item>
+
+       </layout>
+      </widget>
+
+      <!-- Aba da tabela de símbolos -->
+      <widget class="QWidget" name="symbolsTab">
+
+       <attribute name="title">
+        <string>Tabela de símbolos</string>
+       </attribute>
+
+       <layout class="QVBoxLayout" name="symbolsTabLayout">
+
+        <property name="leftMargin">
+         <number>8</number>
+        </property>
+
+        <property name="topMargin">
+         <number>8</number>
+        </property>
+
+        <property name="rightMargin">
+         <number>8</number>
+        </property>
+
+        <property name="bottomMargin">
+         <number>8</number>
+        </property>
+
+        <property name="spacing">
+         <number>6</number>
+        </property>
+
+        <item>
+         <widget class="QLabel" name="symbolsLabel">
+
+          <property name="font">
+           <font>
+            <pointsize>11</pointsize>
+            <bold>true</bold>
+           </font>
+          </property>
+
+          <property name="text">
+           <string>Tabela de símbolos</string>
+          </property>
+
+         </widget>
+        </item>
+
+        <item>
+         <widget class="QTableWidget" name="symbolTable">
+
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>140</height>
+           </size>
+          </property>
+
+          <property name="font">
+           <font>
+            <family>Consolas</family>
+            <pointsize>11</pointsize>
+           </font>
+          </property>
+
+          <property name="editTriggers">
+           <set>QAbstractItemView::NoEditTriggers</set>
+          </property>
+
+          <property name="alternatingRowColors">
+           <bool>true</bool>
+          </property>
+
+          <property name="selectionMode">
+           <enum>QAbstractItemView::SingleSelection</enum>
+          </property>
+
+          <property name="selectionBehavior">
+           <enum>QAbstractItemView::SelectRows</enum>
+          </property>
+
+          <property name="showGrid">
+           <bool>true</bool>
+          </property>
+
+          <property name="sortingEnabled">
+           <bool>false</bool>
+          </property>
+
+          <property name="rowCount">
+           <number>0</number>
+          </property>
+
+          <attribute name="horizontalHeaderStretchLastSection">
+           <bool>true</bool>
+          </attribute>
+
+          <attribute name="verticalHeaderVisible">
+           <bool>false</bool>
+          </attribute>
+
+          <column>
+           <property name="text">
+            <string>Nome</string>
+           </property>
+          </column>
+
+          <column>
+           <property name="text">
+            <string>Tipo</string>
+           </property>
+          </column>
+
+          <column>
+           <property name="text">
+            <string>Modalidade</string>
+           </property>
+          </column>
+
+          <column>
+           <property name="text">
+            <string>Escopo</string>
+           </property>
+          </column>
+
+          <column>
+           <property name="text">
+            <string>Inicializado</string>
+           </property>
+          </column>
+
+          <column>
+           <property name="text">
+            <string>Usado</string>
+           </property>
+          </column>
+
+         </widget>
+        </item>
+
+       </layout>
+      </widget>
 
      </widget>
     </item>
 
    </layout>
-
   </widget>
 
   <widget class="QStatusBar" name="statusbar"/>
