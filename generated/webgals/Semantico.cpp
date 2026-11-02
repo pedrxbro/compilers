@@ -1,3 +1,4 @@
+
 #include "Semantico.h"
 
 #include <algorithm>
@@ -17,229 +18,148 @@ void Semantico::executeAction(
             );
     }
 
-    const std::string &lexeme =
-        token->getLexeme();
-
-    const int position =
-        token->getPosition();
+    const std::string &lexeme = token->getLexeme();
+    const int position = token->getPosition();
 
     switch (action)
     {
-        // ========================================================
-        // TIPOS DAS DECLARACOES
-        // ========================================================
-
+    // ========================================================
+    // TIPOS DAS DECLARACOES - M2.1
+    // ========================================================
     case 1:
-        declarationProcessor_.captureType(
-            lexeme,
-            position
-            );
+        declarationProcessor_.captureType(lexeme, position);
         break;
 
-        // ========================================================
-        // TIPOS DOS LITERAIS
-        // ========================================================
-
+    // ========================================================
+    // TIPOS DOS LITERAIS - M2.1
+    // ========================================================
     case 2:
-        pushLiteralType(
-            DataType::Integer
-            );
+        pushLiteralType(DataType::Integer);
         break;
 
     case 3:
-        pushLiteralType(
-            DataType::Float
-            );
+        pushLiteralType(DataType::Float);
         break;
 
     case 4:
-        pushLiteralType(
-            DataType::Character
-            );
+        pushLiteralType(DataType::Character);
         break;
 
     case 5:
-        pushLiteralType(
-            DataType::Text
-            );
+        pushLiteralType(DataType::Text);
         break;
 
     case 6:
-        pushLiteralType(
-            DataType::Logical
-            );
+        pushLiteralType(DataType::Logical);
         break;
 
     case 7:
-        // NULO ainda não possui um tipo concreto
-        pushLiteralType(
-            DataType::Unknown
-            );
+        pushLiteralType(DataType::Unknown);
         break;
 
-        // ========================================================
-        // OPERADORES BINARIOS
-        // ========================================================
-
+    // ========================================================
+    // OPERADORES BINARIOS - M2.1
+    // ========================================================
     case 8:
     case 9:
     case 10:
     case 11:
     case 12:
     case 13:
-        // Guarda o operador para a redução da expressão.
-        pushBinaryOperator(
-            lexeme,
-            position
-            );
+        pushBinaryOperator(lexeme, position);
         break;
 
-        // ========================================================
-        // OPERADORES UNARIOS
-        // ========================================================
-
+    // ========================================================
+    // OPERADORES UNARIOS - M2.1
+    // ========================================================
     case 14:
     case 15:
-        // Guarda o operador para a redução da expressão.
-        pushUnaryOperator(
-            lexeme,
-            position
-            );
+        pushUnaryOperator(lexeme, position);
         break;
 
-        // ========================================================
-        // REDUCOES DAS EXPRESSOES
-        // ========================================================
-
+    // ========================================================
+    // REDUCOES BINARIAS - M2.1
+    // ========================================================
     case 16:
     case 17:
     case 18:
     case 19:
     case 20:
     case 21:
-        // Calcula o tipo resultante da operação binária.
-        reduceBinaryExpression(
-            position
-            );
+        reduceBinaryExpression(position);
         break;
 
     case 22:
-        // Calcula o tipo resultante da operação unária.
-        reduceUnaryExpression(
-            position
-            );
+        reduceUnaryExpression(position);
         break;
 
-        // ========================================================
-        // DECLARACOES
-        // ========================================================
-
+    // ========================================================
+    // DECLARACOES - M2.1
+    // ========================================================
     case 23:
-        declarationProcessor_
-            .beginVariableDeclaration();
+        declarationProcessor_.beginVariableDeclaration();
         break;
 
     case 24:
-        declarationProcessor_
-            .captureIdentifier(
-                lexeme
-                );
+        declarationProcessor_.captureIdentifier(lexeme);
         break;
 
     case 25:
-        declarationProcessor_
-            .declareSimple(
-                position
-                );
+        declarationProcessor_.declareSimple(position);
         break;
 
     case 26:
-        declarationProcessor_
-            .captureVectorSize(
-                lexeme,
-                position
-                );
+        declarationProcessor_.captureVectorSize(
+            lexeme,
+            position
+            );
         break;
 
     case 27:
-        declarationProcessor_
-            .declareVector(
-                position
-                );
+        declarationProcessor_.declareVector(position);
         break;
 
     case 28:
-        declarationProcessor_
-            .beginParameterDeclaration();
+        declarationProcessor_.beginParameterDeclaration();
         break;
 
-        // ========================================================
-        // SUB-ROTINAS
-        // ========================================================
-
+    // ========================================================
+    // SUB-ROTINAS - M2.1
+    // ========================================================
     case 29:
-        declarationProcessor_
-            .beginProcedure(
-                lexeme,
-                position
-                );
-
-        // Guarda a sub-rotina atualmente sendo processada.
-        captureCurrentSubroutine(
+        declarationProcessor_.beginProcedure(
             lexeme,
             position
             );
+        captureCurrentSubroutine(lexeme, position);
         break;
 
     case 30:
-        declarationProcessor_
-            .beginFunction(
-                lexeme,
-                position
-                );
-
-        // Guarda a sub-rotina atualmente sendo processada.
-        captureCurrentSubroutine(
+        declarationProcessor_.beginFunction(
             lexeme,
             position
             );
+        captureCurrentSubroutine(lexeme, position);
         break;
 
     case 31:
-        // Verifica semanticamente o valor retornado.
-        completeReturn(
-            position
-            );
+        completeReturn(position);
         break;
 
     case 32:
-        declarationProcessor_
-            .endSubroutine(
-                position
-                );
-
-        // Não há mais uma sub-rotina sendo processada.
+        declarationProcessor_.endSubroutine(position);
         currentSubroutine_ = nullptr;
         break;
 
-        // ========================================================
-        // CHAMADAS DE SUB-ROTINAS
-        // ========================================================
-
+    // ========================================================
+    // CHAMADAS DE SUB-ROTINAS - M2.1
+    // ========================================================
     case 33:
-        // Resolve e guarda a sub-rotina chamada.
-        beginSubroutineCall(
-            lexeme,
-            position
-            );
+        beginSubroutineCall(lexeme, position);
         break;
 
     case 34:
-        // O tipo do argumento já foi calculado.
-        // A verificação dos parâmetros será feita posteriormente.
-        discardExpressionResult(
-            position
-            );
+        discardExpressionResult(position);
         break;
 
     case 35:
@@ -247,125 +167,102 @@ void Semantico::executeAction(
         break;
 
     case 36:
-        // Finaliza uma chamada usada como comando.
-        completeCallAsStatement(
-            position
-            );
+        completeCallAsStatement(position);
         break;
 
     case 37:
-        // Finaliza uma chamada usada dentro de uma expressão.
-        completeCallAsExpression(
-            position
-            );
+        completeCallAsExpression(position);
         break;
 
-        // ========================================================
-        // IDENTIFICADORES E VETORES
-        // ========================================================
-
+    // ========================================================
+    // IDENTIFICADORES E VETORES - M2.1
+    // ========================================================
     case 38:
-        // Resolve e guarda uma referência ao identificador.
-        captureIdentifierReference(
-            lexeme,
-            position
-            );
+        captureIdentifierReference(lexeme, position);
         break;
 
     case 39:
-        // Verifica o tipo do índice e marca o vetor como indexado.
-        validateVectorIndex(
-            position
-            );
+        validateVectorIndex(position);
         break;
 
-        // ========================================================
-        // ATRIBUICOES
-        // ========================================================
-
+    // ========================================================
+    // ATRIBUICOES - M2.1
+    // ========================================================
     case 40:
-        // Guarda o identificador como destino da atribuição.
-        captureAssignmentTarget(
-            position
-            );
+        captureAssignmentTarget(position);
         break;
 
     case 41:
-        // Verifica o tipo da expressão e finaliza a atribuição.
-        completeAssignment(
-            position
-            );
+        completeAssignment(position);
         break;
 
-        // ========================================================
-        // ENTRADA E SAIDA
-        // ========================================================
-
+    // ========================================================
+    // ENTRADA E SAIDA - M2.1
+    // ========================================================
     case 42:
-        // Marca o destino da entrada como inicializado.
-        initializeInputTarget(
-            position
-            );
+        initializeInputTarget(position);
         break;
 
     case 43:
-        // Usa a referência de identificador pendente.
-        usePendingIdentifier(
-            position
-            );
+        usePendingIdentifier(position);
         break;
 
-        // ========================================================
-        // OPERANDOS
-        // ========================================================
-
+    // ========================================================
+    // OPERANDOS - M2.1
+    // ========================================================
     case 44:
-        // Obtém o tipo do identificador e adiciona à expressão.
-        pushPendingIdentifierValue(
-            position
-            );
+        pushPendingIdentifierValue(position);
         break;
 
-        // ========================================================
-        // CONDICOES
-        // ========================================================
-
+    // ========================================================
+    // CONDICOES - M2.1
+    // ========================================================
     case 45:
-        // Garante que a condição produz um valor lógico.
-        validateCondition(
-            position
-            );
+        validateCondition(position);
         break;
 
-        // ========================================================
-        // ESCOPOS
-        // ========================================================
-
+    // ========================================================
+    // ESCOPOS - M2.1
+    // ========================================================
     case 46:
-        // Entra em um novo escopo interno.
-        declarationProcessor_
-            .enterInternalScope(
-                lexeme
-                );
+        declarationProcessor_.enterInternalScope(lexeme);
         break;
 
     case 47:
-        // Retorna ao escopo pai.
-        declarationProcessor_
-            .leaveInternalScope(
-                position
-                );
+        declarationProcessor_.leaveInternalScope(position);
+        break;
+
+    // ========================================================
+    // FINALIZACAO - M2.1
+    // ========================================================
+    case 48:
+        finalizeProgram(position);
         break;
 
         // ========================================================
-        // FIM DO PROGRAMA
+        // OPERADORES BIT A BIT - M2.2
         // ========================================================
 
-    case 48:
-        // Verifica se não existem estruturas sem finalização.
-        finalizeProgram(
-            position
-            );
+    // Captura os operadores binários bit a bit.
+    case 49: // ouBitBit
+    case 51: // ouExclusivoBitBit
+    case 53: // eBitBit
+    case 55: // deslocaDireita ou deslocaEsquerda
+        pushBinaryOperator(lexeme, position);
+        break;
+
+    // Reduz as expressões binárias bit a bit.
+    case 50: // ouBitBit
+    case 52: // ouExclusivoBitBit
+    case 54: // eBitBit
+    case 56: // deslocamentos
+        reduceBinaryExpression(position);
+        break;
+
+    // Captura o complemento bit a bit.
+    // A redução continua utilizando a ação #22.
+    case 57:
+        pushUnaryOperator(lexeme, position);
         break;
 
     default:
@@ -373,45 +270,38 @@ void Semantico::executeAction(
     }
 }
 
-// Retorna o gerenciador de escopos para consulta.
+// ============================================================
+// CONSULTA DE ESCOPOS E DIAGNOSTICOS
+// ============================================================
+
 const ScopeManager &Semantico::scopeManager() const
 {
-    return declarationProcessor_
-        .scopeManager();
+    return declarationProcessor_.scopeManager();
 }
 
-// Retorna os avisos semânticos acumulados.
 std::vector<SemanticDiagnostic> Semantico::warnings() const
 {
-    std::vector<SemanticDiagnostic> result =
-        warnings_;
+    std::vector<SemanticDiagnostic> result = warnings_;
 
-    // Obtém todos os símbolos declarados na árvore de escopos.
     std::vector<const Symbol *> symbols =
         declarationProcessor_
             .scopeManager()
             .allSymbols();
 
-    // Ordena primeiro pelo escopo e depois pelo nome.
     std::sort(
         symbols.begin(),
         symbols.end(),
-        [](const Symbol *left,
-           const Symbol *right)
+        [](const Symbol *left, const Symbol *right)
         {
-            if (left->scope() !=
-                right->scope())
+            if (left->scope() != right->scope())
             {
-                return left->scope() <
-                       right->scope();
+                return left->scope() < right->scope();
             }
 
-            return left->name() <
-                   right->name();
+            return left->name() < right->name();
         }
         );
 
-    // Gera avisos para símbolos que nunca foram utilizados.
     for (const Symbol *symbol : symbols)
     {
         if (symbol == nullptr)
@@ -439,21 +329,19 @@ std::vector<SemanticDiagnostic> Semantico::warnings() const
     return result;
 }
 
-// Procura um identificador nos escopos visíveis.
+// ============================================================
+// IDENTIFICADORES
+// ============================================================
+
 Symbol *Semantico::resolveIdentifier(
     const std::string &name,
     int position
     )
 {
     ScopeManager &scopeManager =
-        declarationProcessor_
-            .scopeManager();
+        declarationProcessor_.scopeManager();
 
-    // Procura no escopo atual e em seus escopos pais.
-    Symbol *symbol =
-        scopeManager.findVisible(
-            name
-            );
+    Symbol *symbol = scopeManager.findVisible(name);
 
     if (symbol == nullptr)
     {
@@ -472,30 +360,23 @@ Symbol *Semantico::resolveIdentifier(
     return symbol;
 }
 
-// Resolve um identificador e guarda sua referência para uso posterior.
 void Semantico::captureIdentifierReference(
     const std::string &name,
     int position
     )
 {
-    Symbol *symbol =
-        resolveIdentifier(
-            name,
-            position
-            );
+    Symbol *symbol = resolveIdentifier(name, position);
 
-    pendingIdentifierReferences_
-        .push_back(
-            {
-                symbol,
-                name,
-                position,
-                false
-            }
-            );
+    pendingIdentifierReferences_.push_back(
+        {
+            symbol,
+            name,
+            position,
+            false
+        }
+        );
 }
 
-// Remove e retorna a referência pendente mais recente.
 Semantico::IdentifierReference
 Semantico::popIdentifierReference(
     int position
@@ -512,13 +393,11 @@ Semantico::popIdentifierReference(
     IdentifierReference reference =
         pendingIdentifierReferences_.back();
 
-    pendingIdentifierReferences_
-        .pop_back();
+    pendingIdentifierReferences_.pop_back();
 
     return reference;
 }
 
-// Retorna a referência pendente sem removê-la.
 Semantico::IdentifierReference &
 Semantico::pendingIdentifierReference(
     int position
@@ -535,7 +414,6 @@ Semantico::pendingIdentifierReference(
     return pendingIdentifierReferences_.back();
 }
 
-// Verifica se um identificador pode ser utilizado como valor.
 void Semantico::validateValueReference(
     const IdentifierReference &reference,
     int position
@@ -549,9 +427,7 @@ void Semantico::validateValueReference(
             );
     }
 
-    // Sub-rotinas precisam ser chamadas para produzir valores.
-    if (reference.symbol->kind() ==
-        SymbolKind::Function)
+    if (reference.symbol->kind() == SymbolKind::Function)
     {
         throw SemanticError(
             "Sub-rotina '" +
@@ -561,10 +437,7 @@ void Semantico::validateValueReference(
             );
     }
 
-    // Um vetor precisa ser indexado para produzir um valor.
-    if (reference.symbol
-            ->vectorSize()
-            .has_value() &&
+    if (reference.symbol->vectorSize().has_value() &&
         !reference.indexed)
     {
         throw SemanticError(
@@ -576,7 +449,6 @@ void Semantico::validateValueReference(
     }
 }
 
-// Verifica se um identificador pode ser usado como destino.
 void Semantico::validateAssignmentReference(
     const IdentifierReference &reference,
     int position
@@ -590,9 +462,7 @@ void Semantico::validateAssignmentReference(
             );
     }
 
-    // Sub-rotinas não podem receber atribuições.
-    if (reference.symbol->kind() ==
-        SymbolKind::Function)
+    if (reference.symbol->kind() == SymbolKind::Function)
     {
         throw SemanticError(
             "Sub-rotina '" +
@@ -602,10 +472,7 @@ void Semantico::validateAssignmentReference(
             );
     }
 
-    // Um vetor precisa ser indexado para receber atribuição.
-    if (reference.symbol
-            ->vectorSize()
-            .has_value() &&
+    if (reference.symbol->vectorSize().has_value() &&
         !reference.indexed)
     {
         throw SemanticError(
@@ -617,7 +484,6 @@ void Semantico::validateAssignmentReference(
     }
 }
 
-// Marca uma referência como utilizada e verifica sua inicialização.
 void Semantico::markReferenceUsed(
     const IdentifierReference &reference
     )
@@ -630,9 +496,7 @@ void Semantico::markReferenceUsed(
             );
     }
 
-    // Gera aviso quando uma variável é usada antes de ser inicializada.
-    if (reference.symbol->kind() !=
-            SymbolKind::Function &&
+    if (reference.symbol->kind() != SymbolKind::Function &&
         !reference.symbol->isInitialized())
     {
         warnings_.push_back(
@@ -650,51 +514,36 @@ void Semantico::markReferenceUsed(
     reference.symbol->markUsed();
 }
 
-// Usa a referência pendente como um valor.
 void Semantico::usePendingIdentifier(
     int position
     )
 {
     const IdentifierReference reference =
-        popIdentifierReference(
-            position
-            );
+        popIdentifierReference(position);
 
-    validateValueReference(
-        reference,
-        position
-        );
-
-    markReferenceUsed(
-        reference
-        );
+    validateValueReference(reference, position);
+    markReferenceUsed(reference);
 }
 
-// Obtém o tipo de uma referência e o coloca na expressão atual.
 void Semantico::pushPendingIdentifierValue(
     int position
     )
 {
     const IdentifierReference reference =
-        popIdentifierReference(
-            position
-            );
+        popIdentifierReference(position);
 
-    validateValueReference(
-        reference,
-        position
-        );
-
-    markReferenceUsed(
-        reference
-        );
+    validateValueReference(reference, position);
+    markReferenceUsed(reference);
 
     expressionTypes_.push_back(
         reference.symbol->type()
         );
 }
 
-// Define uma referência como destino da atribuição.
+// ============================================================
+// ATRIBUICOES
+// ============================================================
+
 void Semantico::captureAssignmentTarget(
     int position
     )
@@ -708,20 +557,13 @@ void Semantico::captureAssignmentTarget(
     }
 
     IdentifierReference reference =
-        popIdentifierReference(
-            position
-            );
+        popIdentifierReference(position);
 
-    validateAssignmentReference(
-        reference,
-        position
-        );
+    validateAssignmentReference(reference, position);
 
-    assignmentTarget_ =
-        reference;
+    assignmentTarget_ = reference;
 }
 
-// Verifica a compatibilidade e finaliza uma atribuição.
 void Semantico::completeAssignment(
     int position
     )
@@ -734,56 +576,40 @@ void Semantico::completeAssignment(
             );
     }
 
-    // Obtém o tipo produzido pela expressão.
     const DataType expressionType =
-        popExpressionType(
-            position
-            );
+        popExpressionType(position);
 
     const DataType destinationType =
-        assignmentTarget_
-            ->symbol
-            ->type();
+        assignmentTarget_->symbol->type();
 
-    // Verifica se os tipos podem participar da atribuição.
     const CompatibilityResult result =
         SemanticTable::atribType(
             destinationType,
             expressionType
             );
 
-    if (result ==
-        CompatibilityResult::Error)
+    if (result == CompatibilityResult::Error)
     {
         throw SemanticError(
             "Atribuicao incompativel: identificador '" +
                 assignmentTarget_->name +
                 "' e do tipo " +
-                SemanticTable::typeName(
-                    destinationType
-                    ) +
+                SemanticTable::typeName(destinationType) +
                 ", mas a expressao resulta em " +
-                SemanticTable::typeName(
-                    expressionType
-                    ) +
+                SemanticTable::typeName(expressionType) +
                 ".",
             position
             );
     }
 
-    if (result ==
-        CompatibilityResult::Warning)
+    if (result == CompatibilityResult::Warning)
     {
         warnings_.push_back(
             {
                 "Atribuicao com conversao de " +
-                    SemanticTable::typeName(
-                        expressionType
-                        ) +
+                    SemanticTable::typeName(expressionType) +
                     " para " +
-                    SemanticTable::typeName(
-                        destinationType
-                        ) +
+                    SemanticTable::typeName(destinationType) +
                     " no identificador '" +
                     assignmentTarget_->name +
                     "' pode causar perda de dados.",
@@ -792,50 +618,35 @@ void Semantico::completeAssignment(
             );
     }
 
-    // Uma atribuição válida inicializa o destino.
-    assignmentTarget_
-        ->symbol
-        ->markInitialized();
-
-    // Libera o destino pendente.
+    assignmentTarget_->symbol->markInitialized();
     assignmentTarget_.reset();
 }
 
-// Marca como inicializado o identificador usado como entrada.
 void Semantico::initializeInputTarget(
     int position
     )
 {
     IdentifierReference reference =
-        popIdentifierReference(
-            position
-            );
+        popIdentifierReference(position);
 
-    validateAssignmentReference(
-        reference,
-        position
-        );
+    validateAssignmentReference(reference, position);
 
-    reference.symbol
-        ->markInitialized();
+    reference.symbol->markInitialized();
 }
 
-// Verifica se o índice de um vetor é válido.
+// ============================================================
+// VETORES
+// ============================================================
+
 void Semantico::validateVectorIndex(
     int position
     )
 {
-    // O índice precisa resultar em inteiro.
     const DataType indexType =
-        popExpressionType(
-            position
-            );
+        popExpressionType(position);
 
-    // Obtém a referência do vetor que está sendo indexado.
     IdentifierReference &reference =
-        pendingIdentifierReference(
-            position
-            );
+        pendingIdentifierReference(position);
 
     if (reference.symbol == nullptr)
     {
@@ -845,9 +656,7 @@ void Semantico::validateVectorIndex(
             );
     }
 
-    if (!reference.symbol
-             ->vectorSize()
-             .has_value())
+    if (!reference.symbol->vectorSize().has_value())
     {
         throw SemanticError(
             "Identificador '" +
@@ -857,37 +666,32 @@ void Semantico::validateVectorIndex(
             );
     }
 
-    if (indexType !=
-        DataType::Integer)
+    if (indexType != DataType::Integer)
     {
         throw SemanticError(
             "Indice do vetor '" +
                 reference.name +
                 "' deve ser INTEIRO, mas a expressao resulta em " +
-                SemanticTable::typeName(
-                    indexType
-                    ) +
+                SemanticTable::typeName(indexType) +
                 ".",
             position
             );
     }
 
-    // A referência agora representa um elemento do vetor.
     reference.indexed = true;
 }
 
-// Adiciona o tipo de um literal à pilha de tipos.
+// ============================================================
+// PILHA DE TIPOS
+// ============================================================
+
 void Semantico::pushLiteralType(
     DataType type
     )
 {
-    expressionTypes_
-        .push_back(
-            type
-            );
+    expressionTypes_.push_back(type);
 }
 
-// Remove e retorna o tipo da expressão mais recente.
 DataType Semantico::popExpressionType(
     int position
     )
@@ -900,20 +704,24 @@ DataType Semantico::popExpressionType(
             );
     }
 
-    const DataType type =
-        expressionTypes_.back();
+    const DataType type = expressionTypes_.back();
 
     expressionTypes_.pop_back();
 
     return type;
 }
 
-// Converte o lexema em um operador binário.
+// ============================================================
+// RECONHECIMENTO DOS OPERADORES
+// M2.1 + M2.2
+// ============================================================
+
 BinaryOperator Semantico::binaryOperatorFromLexeme(
     const std::string &lexeme,
     int position
     ) const
 {
+    // Operadores aritméticos da M2.1.
     if (lexeme == "mais")
     {
         return BinaryOperator::Add;
@@ -939,6 +747,7 @@ BinaryOperator Semantico::binaryOperatorFromLexeme(
         return BinaryOperator::Modulo;
     }
 
+    // Operadores relacionais da M2.1.
     if (lexeme == "maiorQue" ||
         lexeme == "menorQue" ||
         lexeme == "maiorIgualQue" ||
@@ -953,6 +762,7 @@ BinaryOperator Semantico::binaryOperatorFromLexeme(
         return BinaryOperator::Equality;
     }
 
+    // Operadores lógicos da M2.1.
     if (lexeme == "e")
     {
         return BinaryOperator::LogicalAnd;
@@ -963,6 +773,32 @@ BinaryOperator Semantico::binaryOperatorFromLexeme(
         return BinaryOperator::LogicalOr;
     }
 
+    // Operadores bit a bit da M2.2.
+    if (lexeme == "eBitBit")
+    {
+        return BinaryOperator::BitwiseAnd;
+    }
+
+    if (lexeme == "ouBitBit")
+    {
+        return BinaryOperator::BitwiseOr;
+    }
+
+    if (lexeme == "ouExclusivoBitBit")
+    {
+        return BinaryOperator::BitwiseXor;
+    }
+
+    if (lexeme == "deslocaEsquerda")
+    {
+        return BinaryOperator::ShiftLeft;
+    }
+
+    if (lexeme == "deslocaDireita")
+    {
+        return BinaryOperator::ShiftRight;
+    }
+
     throw SemanticError(
         "Operador binario desconhecido: '" +
             lexeme +
@@ -971,7 +807,6 @@ BinaryOperator Semantico::binaryOperatorFromLexeme(
         );
 }
 
-// Converte o lexema em um operador unário.
 UnaryOperator Semantico::unaryOperatorFromLexeme(
     const std::string &lexeme,
     int position
@@ -987,6 +822,11 @@ UnaryOperator Semantico::unaryOperatorFromLexeme(
         return UnaryOperator::LogicalNot;
     }
 
+    if (lexeme == "naoBitBit")
+    {
+        return UnaryOperator::BitwiseNot;
+    }
+
     throw SemanticError(
         "Operador unario desconhecido: '" +
             lexeme +
@@ -995,37 +835,40 @@ UnaryOperator Semantico::unaryOperatorFromLexeme(
         );
 }
 
-// Adiciona um operador binário à pilha de operadores.
+// ============================================================
+// EMPILHAMENTO DE OPERADORES
+// ============================================================
+
 void Semantico::pushBinaryOperator(
     const std::string &lexeme,
     int position
     )
 {
-    binaryOperators_
-        .push_back(
-            binaryOperatorFromLexeme(
-                lexeme,
-                position
-                )
-            );
+    binaryOperators_.push_back(
+        binaryOperatorFromLexeme(
+            lexeme,
+            position
+            )
+        );
 }
 
-// Adiciona um operador unário à pilha de operadores.
 void Semantico::pushUnaryOperator(
     const std::string &lexeme,
     int position
     )
 {
-    unaryOperators_
-        .push_back(
-            unaryOperatorFromLexeme(
-                lexeme,
-                position
-                )
-            );
+    unaryOperators_.push_back(
+        unaryOperatorFromLexeme(
+            lexeme,
+            position
+            )
+        );
 }
 
-// Reduz uma expressão binária para um único tipo.
+// ============================================================
+// REDUCOES SEMANTICAS
+// ============================================================
+
 void Semantico::reduceBinaryExpression(
     int position
     )
@@ -1038,23 +881,17 @@ void Semantico::reduceBinaryExpression(
             );
     }
 
-    // A pilha fornece primeiro o operando da direita.
     const DataType right =
-        popExpressionType(
-            position
-            );
+        popExpressionType(position);
 
     const DataType left =
-        popExpressionType(
-            position
-            );
+        popExpressionType(position);
 
     const BinaryOperator operation =
         binaryOperators_.back();
 
     binaryOperators_.pop_back();
 
-    // Consulta a tabela semântica para obter o tipo resultante.
     const DataType result =
         SemanticTable::resultType(
             left,
@@ -1062,35 +899,23 @@ void Semantico::reduceBinaryExpression(
             operation
             );
 
-    if (result ==
-        DataType::Unknown)
+    if (result == DataType::Unknown)
     {
         throw SemanticError(
             "Operacao '" +
-                SemanticTable::operatorName(
-                    operation
-                    ) +
+                SemanticTable::operatorName(operation) +
                 "' incompativel entre " +
-                SemanticTable::typeName(
-                    left
-                    ) +
+                SemanticTable::typeName(left) +
                 " e " +
-                SemanticTable::typeName(
-                    right
-                    ) +
+                SemanticTable::typeName(right) +
                 ".",
             position
             );
     }
 
-    // Coloca o resultado da expressão de volta na pilha.
-    expressionTypes_
-        .push_back(
-            result
-            );
+    expressionTypes_.push_back(result);
 }
 
-// Reduz uma expressão unária para um único tipo.
 void Semantico::reduceUnaryExpression(
     int position
     )
@@ -1104,95 +929,76 @@ void Semantico::reduceUnaryExpression(
     }
 
     const DataType operand =
-        popExpressionType(
-            position
-            );
+        popExpressionType(position);
 
     const UnaryOperator operation =
         unaryOperators_.back();
 
     unaryOperators_.pop_back();
 
-    // Consulta a tabela semântica para obter o tipo resultante.
     const DataType result =
         SemanticTable::resultType(
             operand,
             operation
             );
 
-    if (result ==
-        DataType::Unknown)
+    if (result == DataType::Unknown)
     {
         throw SemanticError(
             "Operacao unaria '" +
-                SemanticTable::operatorName(
-                    operation
-                    ) +
+                SemanticTable::operatorName(operation) +
                 "' incompativel com o tipo " +
-                SemanticTable::typeName(
-                    operand
-                    ) +
+                SemanticTable::typeName(operand) +
                 ".",
             position
             );
     }
 
-    // Coloca o resultado da expressão de volta na pilha.
-    expressionTypes_
-        .push_back(
-            result
-            );
+    expressionTypes_.push_back(result);
 }
 
-// Verifica se uma expressão pode ser usada como condição.
+// ============================================================
+// CONDICOES
+// ============================================================
+
 void Semantico::validateCondition(
     int position
     )
 {
     const DataType conditionType =
-        popExpressionType(
-            position
-            );
+        popExpressionType(position);
 
-    if (conditionType !=
-        DataType::Logical)
+    if (conditionType != DataType::Logical)
     {
         throw SemanticError(
             "Condicao deve resultar em LOGICO, mas a expressao resulta em " +
-                SemanticTable::typeName(
-                    conditionType
-                    ) +
+                SemanticTable::typeName(conditionType) +
                 ".",
             position
             );
     }
 }
 
-// Descarta o resultado de uma expressão que não será utilizado.
 void Semantico::discardExpressionResult(
     int position
     )
 {
-    popExpressionType(
-        position
-        );
+    popExpressionType(position);
 }
 
-// Inicia o processamento de uma chamada de sub-rotina.
+// ============================================================
+// CHAMADAS DE SUB-ROTINAS
+// ============================================================
+
 void Semantico::beginSubroutineCall(
     const std::string &name,
     int position
     )
 {
-    // Resolve a sub-rotina no escopo atual.
     Symbol *symbol =
-        resolveIdentifier(
-            name,
-            position
-            );
+        resolveIdentifier(name, position);
 
-    if (symbol->kind() !=
-        SymbolKind::Function)
+    if (symbol->kind() != SymbolKind::Function)
     {
         throw SemanticError(
             "Identificador '" +
@@ -1204,14 +1010,9 @@ void Semantico::beginSubroutineCall(
 
     symbol->markUsed();
 
-    // Guarda a chamada até que seus argumentos sejam processados.
-    subroutineCalls_
-        .push_back(
-            symbol
-            );
+    subroutineCalls_.push_back(symbol);
 }
 
-// Remove e retorna a chamada de sub-rotina mais recente.
 Symbol *Semantico::popSubroutineCall(
     int position
     )
@@ -1224,23 +1025,19 @@ Symbol *Semantico::popSubroutineCall(
             );
     }
 
-    Symbol *symbol =
-        subroutineCalls_.back();
+    Symbol *symbol = subroutineCalls_.back();
 
     subroutineCalls_.pop_back();
 
     return symbol;
 }
 
-// Finaliza uma chamada usada como comando.
 void Semantico::completeCallAsStatement(
     int position
     )
 {
     Symbol *symbol =
-        popSubroutineCall(
-            position
-            );
+        popSubroutineCall(position);
 
     if (symbol == nullptr)
     {
@@ -1253,15 +1050,12 @@ void Semantico::completeCallAsStatement(
     // O valor retornado pela função não é utilizado.
 }
 
-// Finaliza uma chamada usada dentro de uma expressão.
 void Semantico::completeCallAsExpression(
     int position
     )
 {
     Symbol *symbol =
-        popSubroutineCall(
-            position
-            );
+        popSubroutineCall(position);
 
     if (symbol == nullptr)
     {
@@ -1271,8 +1065,7 @@ void Semantico::completeCallAsExpression(
             );
     }
 
-    if (symbol->type() ==
-        DataType::Void)
+    if (symbol->type() == DataType::Void)
     {
         throw SemanticError(
             "Procedimento '" +
@@ -1282,14 +1075,11 @@ void Semantico::completeCallAsExpression(
             );
     }
 
-    // O tipo retornado passa a fazer parte da expressão.
-    expressionTypes_
-        .push_back(
-            symbol->type()
-            );
+    expressionTypes_.push_back(
+        symbol->type()
+        );
 }
 
-// Localiza e guarda a sub-rotina que está sendo processada.
 void Semantico::captureCurrentSubroutine(
     const std::string &name,
     int position
@@ -1299,9 +1089,7 @@ void Semantico::captureCurrentSubroutine(
         declarationProcessor_
             .scopeManager()
             .globalScope()
-            .findLocal(
-                name
-                );
+            .findLocal(name);
 
     if (symbol == nullptr)
     {
@@ -1313,19 +1101,19 @@ void Semantico::captureCurrentSubroutine(
             );
     }
 
-    currentSubroutine_ =
-        symbol;
+    currentSubroutine_ = symbol;
 }
 
-// Verifica semanticamente o retorno de uma função.
+// ============================================================
+// RETORNO DE FUNCOES
+// ============================================================
+
 void Semantico::completeReturn(
     int position
     )
 {
     const DataType expressionType =
-        popExpressionType(
-            position
-            );
+        popExpressionType(position);
 
     if (currentSubroutine_ == nullptr)
     {
@@ -1335,8 +1123,7 @@ void Semantico::completeReturn(
             );
     }
 
-    if (currentSubroutine_->type() ==
-        DataType::Void)
+    if (currentSubroutine_->type() == DataType::Void)
     {
         throw SemanticError(
             "Procedimento nao pode retornar uma expressao.",
@@ -1344,15 +1131,13 @@ void Semantico::completeReturn(
             );
     }
 
-    // Compara o tipo retornado com o tipo declarado pela função.
     const CompatibilityResult result =
         SemanticTable::atribType(
             currentSubroutine_->type(),
             expressionType
             );
 
-    if (result ==
-        CompatibilityResult::Error)
+    if (result == CompatibilityResult::Error)
     {
         throw SemanticError(
             "Retorno incompativel na funcao '" +
@@ -1370,17 +1155,14 @@ void Semantico::completeReturn(
             );
     }
 
-    if (result ==
-        CompatibilityResult::Warning)
+    if (result == CompatibilityResult::Warning)
     {
         warnings_.push_back(
             {
                 "Retorno da funcao '" +
                     currentSubroutine_->name() +
                     "' realiza conversao de " +
-                    SemanticTable::typeName(
-                        expressionType
-                        ) +
+                    SemanticTable::typeName(expressionType) +
                     " para " +
                     SemanticTable::typeName(
                         currentSubroutine_->type()
@@ -1392,7 +1174,10 @@ void Semantico::completeReturn(
     }
 }
 
-// Verifica se todas as estruturas semânticas foram finalizadas.
+// ============================================================
+// FINALIZACAO DO PROGRAMA
+// ============================================================
+
 void Semantico::finalizeProgram(
     int position
     )
@@ -1437,7 +1222,5 @@ void Semantico::finalizeProgram(
             );
     }
 
-    // Remove tipos que podem ter sido produzidos por literais
-    // usados diretamente em comandos de saída.
     expressionTypes_.clear();
 }

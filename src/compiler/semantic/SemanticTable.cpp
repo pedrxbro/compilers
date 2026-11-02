@@ -1,3 +1,4 @@
+
 #include "SemanticTable.h"
 
 // Determina o tipo resultante de uma operação binária.
@@ -98,6 +99,20 @@ DataType SemanticTable::resultType(
         }
 
         return DataType::Unknown;
+
+    // Operações bit a bit exigem dois inteiros.
+    case BinaryOperator::BitwiseAnd:
+    case BinaryOperator::BitwiseOr:
+    case BinaryOperator::BitwiseXor:
+    case BinaryOperator::ShiftLeft:
+    case BinaryOperator::ShiftRight:
+        if (left == DataType::Integer &&
+            right == DataType::Integer)
+        {
+            return DataType::Integer;
+        }
+
+        return DataType::Unknown;
     }
 
     return DataType::Unknown;
@@ -126,6 +141,15 @@ DataType SemanticTable::resultType(
         if (operand == DataType::Logical)
         {
             return DataType::Logical;
+        }
+
+        return DataType::Unknown;
+
+    // Complemento bit a bit exige um inteiro.
+    case UnaryOperator::BitwiseNot:
+        if (operand == DataType::Integer)
+        {
+            return DataType::Integer;
         }
 
         return DataType::Unknown;
@@ -262,6 +286,21 @@ std::string SemanticTable::operatorName(
 
     case BinaryOperator::LogicalOr:
         return "ou";
+
+    case BinaryOperator::BitwiseAnd:
+        return "eBitBit";
+
+    case BinaryOperator::BitwiseOr:
+        return "ouBitBit";
+
+    case BinaryOperator::BitwiseXor:
+        return "ouExclusivoBitBit";
+
+    case BinaryOperator::ShiftLeft:
+        return "deslocaEsquerda";
+
+    case BinaryOperator::ShiftRight:
+        return "deslocaDireita";
     }
 
     return "desconhecido";
@@ -279,6 +318,9 @@ std::string SemanticTable::operatorName(
 
     case UnaryOperator::LogicalNot:
         return "nao";
+
+    case UnaryOperator::BitwiseNot:
+        return "naoBitBit";
     }
 
     return "desconhecido";
