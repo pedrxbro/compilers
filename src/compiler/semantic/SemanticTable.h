@@ -1,3 +1,4 @@
+
 #ifndef SEMANTIC_TABLE_H
 #define SEMANTIC_TABLE_H
 
@@ -22,13 +23,19 @@ enum class BinaryOperator
     Relational,
     Equality,
     LogicalAnd,
-    LogicalOr
+    LogicalOr,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    ShiftLeft,
+    ShiftRight
 };
 
 enum class UnaryOperator
 {
     Negate,
-    LogicalNot
+    LogicalNot,
+    BitwiseNot
 };
 
 class SemanticTable

@@ -1,0 +1,345 @@
+%%%VERSION 3%%%
+#Options
+GenerateScanner = true
+GenerateParser = true
+Language = C++
+ScannerName = Lexico
+ParserName = Sintatico
+SemanticName = Semantico
+ScannerCaseSensitive = true
+ScannerTable = Full
+Input = String
+Parser = SLR
+#RegularDefinitions
+LETRA : [a-zA-Z]
+DIGITO : [0-9]
+BINARIO : [01]
+HEXADECIMAL : [0-9a-fA-F]
+ID_INICIO : [a-zA-Z_]
+ID_RESTO : [a-zA-Z0-9_]
+WS      : [\ \t\n\r]+
+BARRA : /
+#Tokens
+// Espaços em branco
+: {WS}
+
+// Literais numéricos e identificadores
+INTEIRO_DECIMAL : {DIGITO}+
+INTEIRO_BINARIO : 0b{BINARIO}+
+INTEIRO_HEXADECIMAL : 0x{HEXADECIMAL}+
+FLUTUANTE_LITERAL : {DIGITO}+\.{DIGITO}+
+IDENTIFICADOR : {ID_INICIO}{ID_RESTO}*
+
+
+// Palavras reservadas
+PROGRAMA = IDENTIFICADOR : "programa"
+INICIO = IDENTIFICADOR : "inicio"
+FIM = IDENTIFICADOR : "fim"
+
+INTEIRO = IDENTIFICADOR : "inteiro"
+FLUTUANTE = IDENTIFICADOR : "flutuante"
+TEXTO = IDENTIFICADOR : "texto"
+LOGICO = IDENTIFICADOR : "logico"
+CARACTERE = IDENTIFICADOR : "caractere"
+
+SE = IDENTIFICADOR : "se"
+ENTAO = IDENTIFICADOR : "entao"
+SENAO = IDENTIFICADOR : "senao"
+FIMSE = IDENTIFICADOR : "fimse"
+
+ENQUANTO = IDENTIFICADOR : "enquanto"
+FACA = IDENTIFICADOR : "faca"
+FIMENQUANTO = IDENTIFICADOR : "fimenquanto"
+
+PARA = IDENTIFICADOR : "para"
+ATE = IDENTIFICADOR : "ate"
+PASSO = IDENTIFICADOR : "passo"
+FIMPARA = IDENTIFICADOR : "fimpara"
+
+FUNCAO = IDENTIFICADOR : "funcao"
+RETORNE = IDENTIFICADOR : "retorne"
+FIMFUNCAO = IDENTIFICADOR : "fimfuncao"
+
+LEIA = IDENTIFICADOR : "leia"
+MOSTRE = IDENTIFICADOR : "mostre"
+RECEBE = IDENTIFICADOR : "recebe"
+
+VERDADEIRO = IDENTIFICADOR : "verdadeiro"
+FALSO = IDENTIFICADOR : "falso"
+NULO = IDENTIFICADOR : "nulo"
+
+// Operadores
+MAIS = IDENTIFICADOR : "mais"
+MENOS = IDENTIFICADOR : "menos"
+VEZES = IDENTIFICADOR : "vezes"
+DIVIDO = IDENTIFICADOR : "divido"
+RESTO = IDENTIFICADOR : "resto"
+
+MAIOR_QUE = IDENTIFICADOR : "maiorQue"
+MENOR_QUE = IDENTIFICADOR : "menorQue"
+MAIOR_IGUAL_QUE = IDENTIFICADOR : "maiorIgualQue"
+MENOR_IGUAL_QUE = IDENTIFICADOR : "menorIgualQue"
+IGUAL = IDENTIFICADOR : "igual"
+DIFERENTE = IDENTIFICADOR : "diferente"
+
+E_LOGICO = IDENTIFICADOR : "e"
+OU_LOGICO = IDENTIFICADOR : "ou"
+NAO_LOGICO = IDENTIFICADOR : "nao"
+
+DESLOCA_DIREITA = IDENTIFICADOR : "deslocaDireita"
+DESLOCA_ESQUERDA = IDENTIFICADOR : "deslocaEsquerda"
+E_BIT_BIT = IDENTIFICADOR : "eBitBit"
+OU_BIT_BIT = IDENTIFICADOR : "ouBitBit"
+NAO_BIT_BIT = IDENTIFICADOR : "naoBitBit"
+OU_EXCLUSIVO_BIT_BIT = IDENTIFICADOR : "ouExclusivoBitBit"
+
+// Literais de caractere e texto
+CARACTERE_LITERAL : "'" [^'\n\r] "'"
+TEXTO_LITERAL : \" [^\"\n\r]* \"
+
+// Delimitadores
+ABRE_PARENTESE : "("
+FECHA_PARENTESE : ")"
+ABRE_COLCHETE : "["
+FECHA_COLCHETE : "]"
+ABRE_CHAVE : "{"
+FECHA_CHAVE : "}"
+
+// Pontuadores
+VIRGULA : ","
+PONTO : "."
+PONTO_VIRGULA : ";"
+DOIS_PONTOS : ":"
+
+// Comentarios
+// Depois de // aceita qualquer coisa até o fim da linha
+: {BARRA}{BARRA}[^\n\r]* 
+
+// Depois de /* aceita qualquer conteúdo, várias linhas, até encontrar */
+:! {BARRA}\*([^\*]|\*+[^\*/])*\*+{BARRA}
+
+PROCEDIMENTO = IDENTIFICADOR : "procedimento"
+FIMPROCEDIMENTO = IDENTIFICADOR : "fimprocedimento"
+#NonTerminals
+<programa>
+<lista_comandos>
+<lista_subrotinas>
+<definicao_subrotina>
+<definicao_procedimento>
+<definicao_funcao>
+<retorno>
+<parametros_formais_opcionais>
+<lista_parametros_formais>
+<resto_parametros_formais>
+<parametro_formal>
+<argumentos_opcionais>
+<lista_argumentos>
+<resto_argumentos>
+<comando>
+<declaracao>
+<tipo>
+<lista_identificadores>
+<resto_lista_identificadores>
+<chamada_subrotina>
+<chamada_procedimento>
+<chamada_funcao>
+<item_declaracao>
+<identificador_simples>
+<vetor>
+<tamanho_vetor>
+<atribuicao>
+<destino_atribuicao>
+<posicao_vetor>
+<entrada>
+<saida>
+<item_saida>
+<literal>
+<condicional>
+<senao_opcional>
+<laco_repeticao>
+<laco_pre_testado>
+<laco_controle>
+<operacao_controle>
+<laco_pos_testado>
+<expressao>
+<expressao_ou>
+<expressao_e>
+<expressao_bit_ou>
+<expressao_bit_xor>
+<expressao_bit_e>
+<expressao_igualdade>
+<expressao_relacional>
+<expressao_deslocamento>
+<expressao_aditiva>
+<expressao_multiplicativa>
+<expressao_unaria>
+<expressao_primaria>
+<operando>
+<op_igualdade>
+<op_relacional>
+<op_aditivo>
+<op_multiplicativo>
+<op_unario>
+#Grammar
+<programa> ::= PROGRAMA IDENTIFICADOR <lista_subrotinas> INICIO <lista_comandos> FIM #48;
+
+<lista_comandos> ::= <comando> <lista_comandos> | î;
+
+<lista_subrotinas> ::= <definicao_subrotina> <lista_subrotinas> | î;
+
+<definicao_subrotina> ::= <definicao_procedimento> | <definicao_funcao>;
+
+<definicao_procedimento> ::= PROCEDIMENTO IDENTIFICADOR #29 ABRE_PARENTESE <parametros_formais_opcionais> FECHA_PARENTESE INICIO <lista_comandos> FIMPROCEDIMENTO #32;
+
+<definicao_funcao> ::= FUNCAO <tipo> IDENTIFICADOR #30 ABRE_PARENTESE <parametros_formais_opcionais> FECHA_PARENTESE INICIO <lista_comandos> <retorno> FIMFUNCAO #32;
+
+<retorno> ::= RETORNE <expressao> #31 PONTO_VIRGULA;
+
+<parametros_formais_opcionais> ::= <lista_parametros_formais> | î;
+
+<lista_parametros_formais> ::= <parametro_formal> <resto_parametros_formais>;
+
+<resto_parametros_formais> ::= VIRGULA <parametro_formal> <resto_parametros_formais> | î;
+
+<parametro_formal> ::= <tipo> #28 <item_declaracao>;
+
+<argumentos_opcionais> ::= <lista_argumentos> | î;
+
+<lista_argumentos> ::= <expressao> #34 <resto_argumentos>;
+
+<resto_argumentos> ::= VIRGULA <expressao> #34 <resto_argumentos> | î;
+
+<comando> ::= <declaracao>
+            | <atribuicao>
+            | <entrada>
+            | <saida>
+            | <condicional>
+            | <laco_repeticao>
+            | <chamada_procedimento>;
+
+<declaracao> ::= <tipo> #23 <lista_identificadores> PONTO_VIRGULA;
+
+<tipo> ::= INTEIRO #1
+         | FLUTUANTE #1
+         | TEXTO #1
+         | LOGICO #1
+         | CARACTERE #1;
+
+<lista_identificadores> ::= <item_declaracao> <resto_lista_identificadores>;
+
+<resto_lista_identificadores> ::= VIRGULA <item_declaracao> <resto_lista_identificadores> | î;
+
+<chamada_subrotina> ::= IDENTIFICADOR #33 ABRE_PARENTESE <argumentos_opcionais> FECHA_PARENTESE #35;
+
+<chamada_procedimento> ::= <chamada_subrotina> PONTO_VIRGULA #36;
+
+<chamada_funcao> ::= <chamada_subrotina> #37;
+
+<item_declaracao> ::= <identificador_simples> #25 | <vetor>;
+
+<identificador_simples> ::= IDENTIFICADOR #24;
+
+<vetor> ::= <identificador_simples> ABRE_COLCHETE <tamanho_vetor> FECHA_COLCHETE #27;
+
+<tamanho_vetor> ::= INTEIRO_DECIMAL #26
+                  | INTEIRO_BINARIO #26
+                  | INTEIRO_HEXADECIMAL #26;
+
+<atribuicao> ::= <destino_atribuicao> #40 RECEBE <expressao> #41 PONTO_VIRGULA;
+
+<destino_atribuicao> ::= IDENTIFICADOR #38 | <posicao_vetor>;
+
+<posicao_vetor> ::= IDENTIFICADOR #38 ABRE_COLCHETE <expressao> #39 FECHA_COLCHETE;
+
+<entrada> ::= LEIA ABRE_PARENTESE <destino_atribuicao> #42 FECHA_PARENTESE PONTO_VIRGULA;
+
+<saida> ::= MOSTRE ABRE_PARENTESE <item_saida> FECHA_PARENTESE PONTO_VIRGULA;
+
+<item_saida> ::= <destino_atribuicao> #43 | <literal>;
+
+<literal> ::= INTEIRO_DECIMAL #2
+            | INTEIRO_BINARIO #2
+            | INTEIRO_HEXADECIMAL #2
+            | FLUTUANTE_LITERAL #3
+            | CARACTERE_LITERAL #4
+            | TEXTO_LITERAL #5
+            | VERDADEIRO #6
+            | FALSO #6
+            | NULO #7;
+
+<condicional> ::= SE <expressao> #45 ENTAO #46 <lista_comandos> #47 <senao_opcional> FIMSE;
+
+<senao_opcional> ::= SENAO #46 <lista_comandos> #47 | î;
+
+<laco_repeticao> ::= <laco_pre_testado> | <laco_controle> | <laco_pos_testado>;
+
+<laco_pre_testado> ::= ENQUANTO <expressao> #45 FACA #46 <lista_comandos> #47 FIMENQUANTO;
+
+<laco_controle> ::= PARA #46 <operacao_controle> ATE <expressao> PASSO <operacao_controle> FACA <lista_comandos> #47 FIMPARA;
+
+<operacao_controle> ::= IDENTIFICADOR #38 #40 RECEBE <expressao> #41;
+
+<laco_pos_testado> ::= FACA #46 <lista_comandos> ATE <expressao> #45 #47 PONTO_VIRGULA;
+
+<expressao> ::= <expressao_ou>;
+
+<expressao_ou> ::= <expressao_ou> OU_LOGICO #12 <expressao_e> #21
+                 | <expressao_e>;
+
+<expressao_e> ::= <expressao_e> E_LOGICO #13 <expressao_bit_ou> #20
+                | <expressao_bit_ou>;
+
+<expressao_bit_ou> ::= <expressao_bit_ou> OU_BIT_BIT #49 <expressao_bit_xor> #50
+                     | <expressao_bit_xor>;
+
+<expressao_bit_xor> ::= <expressao_bit_xor> OU_EXCLUSIVO_BIT_BIT #51 <expressao_bit_e> #52
+                      | <expressao_bit_e>;
+
+<expressao_bit_e> ::= <expressao_bit_e> E_BIT_BIT #53 <expressao_igualdade> #54
+                    | <expressao_igualdade>;
+
+<expressao_igualdade> ::= <expressao_igualdade> <op_igualdade> <expressao_relacional> #19
+                        | <expressao_relacional>;
+
+<expressao_relacional> ::= <expressao_relacional> <op_relacional> <expressao_deslocamento> #18
+                         | <expressao_deslocamento>;
+
+<expressao_deslocamento> ::= <expressao_deslocamento> DESLOCA_DIREITA #55 <expressao_aditiva> #56
+                           | <expressao_deslocamento> DESLOCA_ESQUERDA #55 <expressao_aditiva> #56
+                           | <expressao_aditiva>;
+
+<expressao_aditiva> ::= <expressao_aditiva> <op_aditivo> <expressao_multiplicativa> #17
+                      | <expressao_multiplicativa>;
+
+<expressao_multiplicativa> ::= <expressao_multiplicativa> <op_multiplicativo> <expressao_unaria> #16
+                             | <expressao_unaria>;
+
+<expressao_unaria> ::= <op_unario> <expressao_unaria> #22
+                     | <expressao_primaria>;
+
+<expressao_primaria> ::= <operando>
+                       | <chamada_funcao>
+                       | ABRE_PARENTESE <expressao> FECHA_PARENTESE;
+
+<operando> ::= IDENTIFICADOR #38 #44
+             | <posicao_vetor> #44
+             | <literal>;
+
+<op_igualdade> ::= IGUAL #11 | DIFERENTE #11;
+
+<op_relacional> ::= MAIOR_QUE #10
+                  | MENOR_QUE #10
+                  | MAIOR_IGUAL_QUE #10
+                  | MENOR_IGUAL_QUE #10;
+
+<op_aditivo> ::= MAIS #8 | MENOS #8;
+
+<op_multiplicativo> ::= VEZES #9 | DIVIDO #9 | RESTO #9;
+
+<op_unario> ::= MENOS #14
+              | NAO_LOGICO #15
+              | NAO_BIT_BIT #57;
+#SimulatorText
+CnByb2dyYW1hIHRlc3RlQml0d2lzZQppbmljaW8KaW50ZWlybyBhLCBiLCByZXN1bHRhZG87CgphIHJlY2ViZSA2OwpiIHJlY2ViZSAzOwoKcmVzdWx0YWRvIHJlY2ViZSBhIGVCaXRCaXQgYjsKcmVzdWx0YWRvIHJlY2ViZSBhIG91Qml0Qml0IGI7CnJlc3VsdGFkbyByZWNlYmUgYSBvdUV4Y2x1c2l2b0JpdEJpdCBiOwpyZXN1bHRhZG8gcmVjZWJlIG5hb0JpdEJpdCBhOwpyZXN1bHRhZG8gcmVjZWJlIGEgZGVzbG9jYUVzcXVlcmRhIDI7CnJlc3VsdGFkbyByZWNlYmUgYSBkZXNsb2NhRGlyZWl0YSAxOwoKbW9zdHJlKHJlc3VsdGFkbyk7CmZpbQo=
+#ExtendedOptions
+UseAstLib = false
