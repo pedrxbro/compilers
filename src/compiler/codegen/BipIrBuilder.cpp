@@ -9,6 +9,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -25,6 +26,18 @@ struct SourceToken
     int position;
 };
 
+struct KnownSymbol
+{
+    bool isVector = false;
+    std::size_t size = 1;
+};
+
+struct Target
+{
+    std::string name;
+    ExpressionPtr index;
+};
+
 ExpressionPtr makeLiteral(int value)
 {
     auto expression = std::make_shared<Expression>();
@@ -38,6 +51,18 @@ ExpressionPtr makeVariable(const std::string &name)
     auto expression = std::make_shared<Expression>();
     expression->operation = Operation::Variable;
     expression->name = name;
+    return expression;
+}
+
+ExpressionPtr makeVectorElement(
+    const std::string &name,
+    ExpressionPtr index
+    )
+{
+    auto expression = std::make_shared<Expression>();
+    expression->operation = Operation::VectorElement;
+    expression->name = name;
+    expression->index = std::move(index);
     return expression;
 }
 
@@ -199,19 +224,43 @@ public:
 
         for (const auto &symbol : analysis.symbolTable)
         {
-            if (symbol.scope == "global" &&
-                symbol.kind == "variavel" &&
-                symbol.type == "inteiro" &&
+            if (symbol.scope != "global" ||
+                symbol.type != "inteiro")
+            {
+                continue;
+            }
+
+            if (symbol.kind == "variavel" &&
                 !symbol.vectorSize.has_value())
             {
-                validVariables_.insert(symbol.name);
+                knownSymbols_.emplace(
+                    symbol.name,
+                    KnownSymbol{false, 1}
+                    );
+            }
+            else if (
+                symbol.kind == "vetor" &&
+                symbol.vectorSize.has_value() &&
+                symbol.vectorSize.value() > 0)
+            {
+                knownSymbols_.emplace(
+                    symbol.name,
+                    KnownSymbol{
+                        true,
+                        symbol.vectorSize.value()
+                    }
+                    );
             }
         }
     }
 
     Program parse()
     {
-        consume(t_PROGRAMA, "Palavra 'programa' esperada.");
+        consume(
+            t_PROGRAMA,
+            "Palavra 'programa' esperada."
+            );
+
         consume(
             t_IDENTIFICADOR,
             "Identificador do programa esperado."
@@ -225,7 +274,10 @@ public:
                 );
         }
 
-        consume(t_INICIO, "Palavra 'inicio' esperada.");
+        consume(
+            t_INICIO,
+            "Palavra 'inicio' esperada."
+            );
 
         while (!check(t_FIM))
         {
@@ -242,11 +294,19 @@ public:
             {
                 parseAssignment();
             }
+            else if (check(t_LEIA))
+            {
+                parseInput();
+            }
+            else if (check(t_MOSTRE))
+            {
+                parseOutput();
+            }
             else
             {
                 fail(
                     "Comando ou declaracao sem suporte "
-                    "no nucleo BIP: '" +
+                    "no gerador BIP: '" +
                     current().lexeme + "'."
                     );
             }
@@ -306,22 +366,18 @@ private:
             );
     }
 
-    void requireVariable(
+    static bool reservedName(const std::string &name)
+    {
+        return name == "_PRINCIPAL" ||
+               name.rfind("__bip_tmp_", 0) == 0 ||
+               name.rfind("__bip_vec_slot_", 0) == 0;
+    }
+
+    const KnownSymbol &requireSymbol(
         const SourceToken &token
         ) const
     {
-        if (validVariables_.count(token.lexeme) == 0)
-        {
-            throw CodegenError(
-                "Identificador '" + token.lexeme +
-                    "' nao corresponde a uma variavel "
-                    "inteira escalar global validada.",
-                token.position
-                );
-        }
-
-        if (token.lexeme == "_PRINCIPAL" ||
-            token.lexeme.rfind("__bip_tmp_", 0) == 0)
+        if (reservedName(token.lexeme))
         {
             throw CodegenError(
                 "Identificador reservado pelo gerador BIP: " +
@@ -329,6 +385,22 @@ private:
                 token.position
                 );
         }
+
+        const auto found = knownSymbols_.find(
+            token.lexeme
+            );
+
+        if (found == knownSymbols_.end())
+        {
+            throw CodegenError(
+                "Identificador '" + token.lexeme +
+                    "' nao corresponde a variavel ou "
+                    "vetor inteiro global validado.",
+                token.position
+                );
+        }
+
+        return found->second;
     }
 
     void parseDeclaration()
@@ -342,19 +414,60 @@ private:
                 "Identificador esperado na declaracao."
                 );
 
-            requireVariable(identifier);
+            const KnownSymbol &symbol =
+                requireSymbol(identifier);
+
+            bool isVector = false;
+            std::size_t size = 1;
 
             if (check(t_ABRE_COLCHETE))
             {
-                fail(
-                    "Declaracoes de vetores ainda nao "
-                    "sao suportadas neste nucleo."
+                advance();
+
+                if (!isIntegerLiteral(current().id))
+                {
+                    fail(
+                        "Tamanho literal inteiro esperado "
+                        "na declaracao do vetor."
+                        );
+                }
+
+                const SourceToken sizeToken = advance();
+                const int parsedSize = parseInteger(sizeToken);
+
+                if (parsedSize <= 0)
+                {
+                    throw CodegenError(
+                        "Tamanho de vetor deve ser positivo.",
+                        sizeToken.position
+                        );
+                }
+
+                size = static_cast<std::size_t>(
+                    parsedSize
+                    );
+
+                isVector = true;
+
+                consume(
+                    t_FECHA_COLCHETE,
+                    "Colchete de fechamento esperado."
                     );
             }
 
-            if (!declaredVariables_.insert(
-                                       identifier.lexeme
-                                       ).second)
+            if (isVector != symbol.isVector ||
+                size != symbol.size)
+            {
+                throw CodegenError(
+                    "Declaracao de '" + identifier.lexeme +
+                        "' diverge da tabela de simbolos.",
+                    identifier.position
+                    );
+            }
+
+            if (!declaredNames_.insert(
+                                   identifier.lexeme
+                                   ).second)
             {
                 throw CodegenError(
                     "Declaracao duplicada no IR: " +
@@ -363,7 +476,9 @@ private:
                     );
             }
 
-            program_.variables.push_back(identifier.lexeme);
+            program_.declarations.push_back(
+                {identifier.lexeme, size, isVector}
+                );
 
             if (!check(t_VIRGULA))
             {
@@ -380,22 +495,71 @@ private:
             );
     }
 
-    void parseAssignment()
+    Target parseTarget()
     {
-        const SourceToken destination = consume(
+        const SourceToken identifier = consume(
             t_IDENTIFICADOR,
-            "Destino da atribuicao esperado."
+            "Identificador esperado."
             );
 
-        requireVariable(destination);
+        const KnownSymbol &symbol =
+            requireSymbol(identifier);
+
+        Target target;
+        target.name = identifier.lexeme;
 
         if (check(t_ABRE_COLCHETE))
         {
-            fail(
-                "Atribuicao em posicao de vetor "
-                "ainda nao possui suporte BIP."
+            if (!symbol.isVector)
+            {
+                throw CodegenError(
+                    "Identificador escalar nao aceita indice: " +
+                        identifier.lexeme,
+                    identifier.position
+                    );
+            }
+
+            advance();
+
+            target.index = parseExpression(1);
+
+            consume(
+                t_FECHA_COLCHETE,
+                "Colchete de fechamento esperado."
+                );
+
+            if (target.index->operation ==
+                Operation::Literal)
+            {
+                const int value = target.index->value;
+
+                if (value < 0 ||
+                    static_cast<std::size_t>(value) >=
+                        symbol.size)
+                {
+                    throw CodegenError(
+                        "Indice literal fora dos limites "
+                        "do vetor '" + identifier.lexeme + "'.",
+                        identifier.position
+                        );
+                }
+            }
+        }
+        else if (symbol.isVector)
+        {
+            throw CodegenError(
+                "Acesso ao vetor '" + identifier.lexeme +
+                    "' exige um indice.",
+                identifier.position
                 );
         }
+
+        return target;
+    }
+
+    void parseAssignment()
+    {
+        Target target = parseTarget();
 
         consume(
             t_RECEBE,
@@ -406,15 +570,113 @@ private:
 
         consume(
             t_PONTO_VIRGULA,
-            "Operacao sem suporte ou ponto e virgula ausente "
-            "apos a expressao."
+            "Operacao sem suporte ou ponto e virgula "
+            "ausente apos a expressao."
             );
 
-        program_.assignments.push_back(
+        Statement statement;
+        statement.kind = StatementKind::Assignment;
+        statement.destination = std::move(target.name);
+        statement.destinationIndex = std::move(target.index);
+        statement.expression = std::move(expression);
+
+        program_.statements.push_back(
+            std::move(statement)
+            );
+    }
+
+    void parseInput()
+    {
+        consume(t_LEIA, "Palavra 'leia' esperada.");
+
+        consume(
+            t_ABRE_PARENTESE,
+            "Parenteses de abertura esperado em leia."
+            );
+
+        Target target = parseTarget();
+
+        consume(
+            t_FECHA_PARENTESE,
+            "Parenteses de fechamento esperado em leia."
+            );
+
+        consume(
+            t_PONTO_VIRGULA,
+            "Ponto e virgula esperado apos leia."
+            );
+
+        Statement statement;
+        statement.kind = StatementKind::Input;
+        statement.destination = std::move(target.name);
+        statement.destinationIndex = std::move(target.index);
+
+        program_.statements.push_back(
+            std::move(statement)
+            );
+    }
+
+    void parseOutput()
+    {
+        consume(t_MOSTRE, "Palavra 'mostre' esperada.");
+
+        consume(
+            t_ABRE_PARENTESE,
+            "Parenteses de abertura esperado em mostre."
+            );
+
+        ExpressionPtr expression;
+
+        if (isIntegerLiteral(current().id))
+        {
+            const SourceToken token = advance();
+
+            expression = makeLiteral(
+                parseInteger(token)
+                );
+        }
+        else if (check(t_IDENTIFICADOR))
+        {
+            Target target = parseTarget();
+
+            if (target.index)
             {
-                destination.lexeme,
-                std::move(expression)
+                expression = makeVectorElement(
+                    target.name,
+                    std::move(target.index)
+                    );
             }
+            else
+            {
+                expression = makeVariable(
+                    target.name
+                    );
+            }
+        }
+        else
+        {
+            fail(
+                "Saida BIP aceita literal inteiro, "
+                "variavel ou elemento de vetor."
+                );
+        }
+
+        consume(
+            t_FECHA_PARENTESE,
+            "Parenteses de fechamento esperado em mostre."
+            );
+
+        consume(
+            t_PONTO_VIRGULA,
+            "Ponto e virgula esperado apos mostre."
+            );
+
+        Statement statement;
+        statement.kind = StatementKind::Output;
+        statement.expression = std::move(expression);
+
+        program_.statements.push_back(
+            std::move(statement)
             );
     }
 
@@ -432,6 +694,7 @@ private:
             }
 
             const TokenId tokenId = advance().id;
+
             const Operation operation =
                 binaryOperation(tokenId);
 
@@ -501,20 +764,27 @@ private:
 
         if (check(t_IDENTIFICADOR))
         {
-            const SourceToken token = advance();
+            Target target = parseTarget();
 
-            requireVariable(token);
-
-            if (check(t_ABRE_COLCHETE) ||
-                check(t_ABRE_PARENTESE))
+            if (check(t_ABRE_PARENTESE))
             {
                 fail(
-                    "Acesso a vetor ou chamada de funcao "
-                    "sem suporte em expressao BIP."
+                    "Chamada de funcao sem suporte "
+                    "em expressao BIP."
                     );
             }
 
-            return makeVariable(token.lexeme);
+            if (target.index)
+            {
+                return makeVectorElement(
+                    target.name,
+                    std::move(target.index)
+                    );
+            }
+
+            return makeVariable(
+                target.name
+                );
         }
 
         fail(
@@ -528,8 +798,8 @@ private:
 
     Program program_;
 
-    std::unordered_set<std::string> validVariables_;
-    std::unordered_set<std::string> declaredVariables_;
+    std::unordered_map<std::string, KnownSymbol> knownSymbols_;
+    std::unordered_set<std::string> declaredNames_;
 };
 
 }

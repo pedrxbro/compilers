@@ -2,10 +2,9 @@
 #include "BipIr.h"
 
 #include <cstddef>
-#include <limits>
 #include <sstream>
 #include <string>
-#include <unordered_set>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -18,6 +17,8 @@ constexpr int MIN_IMMEDIATE = -1024;
 constexpr int MAX_IMMEDIATE = 1023;
 constexpr int MIN_WORD = -32768;
 constexpr int MAX_WORD = 32767;
+
+constexpr std::size_t MAX_DATA_CELLS = 2048;
 
 struct Temporary
 {
@@ -37,58 +38,135 @@ bool fitsWord(int value)
            value <= MAX_WORD;
 }
 
+bool reservedName(const std::string &name)
+{
+    return name == "_PRINCIPAL" ||
+           name.rfind("__bip_tmp_", 0) == 0 ||
+           name.rfind("__bip_vec_slot_", 0) == 0;
+}
+
 class EmitterState
 {
 public:
     explicit EmitterState(const Program &program)
         : program_(program)
     {
-        for (const std::string &name : program.variables)
+        for (const Declaration &declaration :
+             program_.declarations)
         {
-            if (name == "_PRINCIPAL" ||
-                name.rfind("__bip_tmp_", 0) == 0)
+            if (declaration.name.empty() ||
+                reservedName(declaration.name))
             {
                 throw CodegenError(
-                    "Identificador reservado: " + name
+                    "Identificador invalido ou reservado: " +
+                    declaration.name
                     );
             }
 
-            if (!variableNames_.insert(name).second)
+            if (declaration.size == 0 ||
+                (!declaration.isVector &&
+                 declaration.size != 1))
             {
                 throw CodegenError(
-                    "Variavel duplicada no IR: " + name
+                    "Declaracao de memoria BIP invalida: " +
+                    declaration.name
                     );
             }
+
+            if (!declarations_.emplace(
+                                  declaration.name,
+                                  declaration
+                                  ).second)
+            {
+                throw CodegenError(
+                    "Identificador duplicado no IR: " +
+                    declaration.name
+                    );
+            }
+
+            if (declaration.size >
+                MAX_DATA_CELLS - dataCells_)
+            {
+                throw CodegenError(
+                    "Declaracoes excedem a memoria "
+                    "de dados enderecavel do BIP."
+                    );
+            }
+
+            dataCells_ += declaration.size;
         }
     }
 
     std::string generate()
     {
-        for (const Assignment &assignment :
-             program_.assignments)
+        for (const Statement &statement :
+             program_.statements)
         {
-            requireVariable(assignment.destination);
-
-            if (!assignment.expression)
+            switch (statement.kind)
             {
-                throw CodegenError(
-                    "Atribuicao sem expressao."
-                    );
-            }
+            case StatementKind::Assignment:
+                emitAssignment(statement);
+                break;
 
-            emitExpression(assignment.expression);
-            instruction("STO", assignment.destination);
+            case StatementKind::Input:
+                emitInput(statement);
+                break;
+
+            case StatementKind::Output:
+                emitOutput(statement);
+                break;
+            }
         }
 
         instruction("HLT", "0");
+
+        if (temporaries_.size() >
+            MAX_DATA_CELLS - dataCells_)
+        {
+            throw CodegenError(
+                "Variaveis e temporarios excedem "
+                "a memoria de dados BIP."
+                );
+        }
+
+        for (const Temporary &temporary : temporaries_)
+        {
+            if (temporary.inUse)
+            {
+                throw CodegenError(
+                    "Temporario ainda ocupado ao "
+                    "finalizar a geracao."
+                    );
+            }
+        }
 
         std::ostringstream output;
 
         output << ".data\n";
 
-        for (const std::string &name : program_.variables)
+        for (std::size_t i = 0;
+             i < program_.declarations.size();
+             ++i)
         {
-            output << name << ": 0\n";
+            const Declaration &declaration =
+                program_.declarations[i];
+
+            output << declaration.name << ": 0\n";
+
+            // Cada elemento adicional ocupa uma celula.
+            // A sequencia comeca no rotulo do vetor.
+            if (declaration.isVector)
+            {
+                for (std::size_t j = 1;
+                     j < declaration.size;
+                     ++j)
+                {
+                    output
+                        << "__bip_vec_slot_"
+                        << i << "_" << j
+                        << ": 0\n";
+                }
+            }
         }
 
         for (const Temporary &temporary : temporaries_)
@@ -108,12 +186,49 @@ public:
     }
 
 private:
-    void requireVariable(const std::string &name) const
+    const Declaration &requireDeclaration(
+        const std::string &name
+        ) const
     {
-        if (variableNames_.count(name) == 0)
+        const auto found = declarations_.find(name);
+
+        if (found == declarations_.end())
         {
             throw CodegenError(
-                "Variavel nao declarada no IR: " + name
+                "Identificador nao declarado no IR: " +
+                name
+                );
+        }
+
+        return found->second;
+    }
+
+    void requireScalar(
+        const std::string &name
+        ) const
+    {
+        const Declaration &declaration =
+            requireDeclaration(name);
+
+        if (declaration.isVector)
+        {
+            throw CodegenError(
+                "Variavel escalar esperada: " + name
+                );
+        }
+    }
+
+    void requireVector(
+        const std::string &name
+        ) const
+    {
+        const Declaration &declaration =
+            requireDeclaration(name);
+
+        if (!declaration.isVector)
+        {
+            throw CodegenError(
+                "Vetor esperado: " + name
                 );
         }
     }
@@ -133,7 +248,10 @@ private:
         int operand
         )
     {
-        instruction(opcode, std::to_string(operand));
+        instruction(
+            opcode,
+            std::to_string(operand)
+            );
     }
 
     void loadLiteral(int value)
@@ -149,7 +267,7 @@ private:
         {
             throw CodegenError(
                 "Literal nao representavel por LDI "
-                "neste nucleo BIP: " +
+                "neste gerador BIP: " +
                 std::to_string(value)
                 );
         }
@@ -172,14 +290,16 @@ private:
             "__bip_tmp_" +
             std::to_string(temporaries_.size());
 
-        if (variableNames_.count(name) != 0)
+        if (declarations_.count(name) != 0)
         {
             throw CodegenError(
-                "Conflito com variavel temporaria: " + name
+                "Conflito com temporario: " + name
                 );
         }
 
-        temporaries_.push_back({name, true});
+        temporaries_.push_back(
+            {name, true}
+            );
 
         return name;
     }
@@ -207,7 +327,9 @@ private:
             );
     }
 
-    static std::string memoryOpcode(Operation operation)
+    static std::string memoryOpcode(
+        Operation operation
+        )
     {
         switch (operation)
         {
@@ -233,7 +355,9 @@ private:
         }
     }
 
-    static std::string immediateOpcode(Operation operation)
+    static std::string immediateOpcode(
+        Operation operation
+        )
     {
         switch (operation)
         {
@@ -268,7 +392,8 @@ private:
                 );
         }
 
-        if (expression.operation == Operation::BitwiseNot)
+        if (expression.operation ==
+            Operation::BitwiseNot)
         {
             emitExpression(expression.left);
             instruction("NOT", "0");
@@ -288,7 +413,9 @@ private:
                 if (value >= MIN_IMMEDIATE &&
                     value <= MAX_IMMEDIATE)
                 {
-                    loadLiteral(static_cast<int>(value));
+                    loadLiteral(
+                        static_cast<int>(value)
+                        );
                     return;
                 }
             }
@@ -342,7 +469,8 @@ private:
         emitExpression(expression.left);
 
         instruction(
-            expression.operation == Operation::ShiftLeft
+            expression.operation ==
+                    Operation::ShiftLeft
                 ? "SLL"
                 : "SRL",
             amount
@@ -358,8 +486,10 @@ private:
                 );
         }
 
-        if (expression.operation == Operation::ShiftLeft ||
-            expression.operation == Operation::ShiftRight)
+        if (expression.operation ==
+                Operation::ShiftLeft ||
+            expression.operation ==
+                Operation::ShiftRight)
         {
             emitShift(expression);
             return;
@@ -382,7 +512,7 @@ private:
 
         if (right.operation == Operation::Variable)
         {
-            requireVariable(right.name);
+            requireScalar(right.name);
 
             emitExpression(expression.left);
 
@@ -394,6 +524,8 @@ private:
             return;
         }
 
+        // Preserva o primeiro operando enquanto
+        // o segundo e avaliado.
         const std::string leftTemporary =
             acquireTemporary();
 
@@ -417,7 +549,9 @@ private:
         releaseTemporary(leftTemporary);
     }
 
-    void emitExpression(const ExpressionPtr &expression)
+    void emitExpression(
+        const ExpressionPtr &expression
+        )
     {
         if (!expression)
         {
@@ -433,8 +567,23 @@ private:
             return;
 
         case Operation::Variable:
-            requireVariable(expression->name);
+            requireScalar(expression->name);
             instruction("LD", expression->name);
+            return;
+
+        case Operation::VectorElement:
+            requireVector(expression->name);
+
+            if (!expression->index)
+            {
+                throw CodegenError(
+                    "Acesso a vetor sem indice."
+                    );
+            }
+
+            emitExpression(expression->index);
+            instruction("STO", "$indr");
+            instruction("LDV", expression->name);
             return;
 
         case Operation::Negate:
@@ -458,9 +607,104 @@ private:
             );
     }
 
+    void emitAssignment(const Statement &statement)
+    {
+        if (!statement.expression)
+        {
+            throw CodegenError(
+                "Atribuicao sem expressao."
+                );
+        }
+
+        if (!statement.destinationIndex)
+        {
+            requireScalar(statement.destination);
+
+            emitExpression(statement.expression);
+
+            instruction(
+                "STO",
+                statement.destination
+                );
+
+            return;
+        }
+
+        requireVector(statement.destination);
+
+        // O indice permanece reservado durante
+        // toda a avaliacao do lado direito.
+        const std::string indexTemporary =
+            acquireTemporary();
+
+        emitExpression(statement.destinationIndex);
+
+        instruction("STO", indexTemporary);
+
+        // A expressao pode acessar outros vetores
+        // e modificar o registrador $indr.
+        emitExpression(statement.expression);
+
+        const std::string valueTemporary =
+            acquireTemporary();
+
+        instruction("STO", valueTemporary);
+
+        // Restaura o indice antes de armazenar.
+        instruction("LD", indexTemporary);
+        instruction("STO", "$indr");
+
+        // STOV recebe o valor do ACC.
+        instruction("LD", valueTemporary);
+        instruction("STOV", statement.destination);
+
+        releaseTemporary(valueTemporary);
+        releaseTemporary(indexTemporary);
+    }
+
+    void emitInput(const Statement &statement)
+    {
+        if (!statement.destinationIndex)
+        {
+            requireScalar(statement.destination);
+
+            instruction("LD", "$in_port");
+            instruction(
+                "STO",
+                statement.destination
+                );
+
+            return;
+        }
+
+        requireVector(statement.destination);
+
+        emitExpression(statement.destinationIndex);
+
+        instruction("STO", "$indr");
+        instruction("LD", "$in_port");
+        instruction("STOV", statement.destination);
+    }
+
+    void emitOutput(const Statement &statement)
+    {
+        if (!statement.expression)
+        {
+            throw CodegenError(
+                "Comando mostre sem operando."
+                );
+        }
+
+        emitExpression(statement.expression);
+
+        instruction("STO", "$out_port");
+    }
+
     const Program &program_;
 
-    std::unordered_set<std::string> variableNames_;
+    std::unordered_map<std::string, Declaration> declarations_;
+
+    std::size_t dataCells_ = 0;
 
     std::vector<Temporary> temporaries_;
     std::vector<std::string> instructions_;
@@ -468,7 +712,9 @@ private:
 
 }
 
-std::string BipEmitter::emit(const Program &program) const
+std::string BipEmitter::emit(
+    const Program &program
+    ) const
 {
     EmitterState emitter(program);
     return emitter.generate();
