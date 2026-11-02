@@ -167,6 +167,13 @@ CompatibilityResult SemanticTable::atribType(
         return CompatibilityResult::Warning;
     }
 
+    // Um caractere pode ser atribuído a uma variável de texto.
+    if (destination == DataType::Text &&
+        source == DataType::Character)
+    {
+        return CompatibilityResult::Ok;
+    }
+
     return CompatibilityResult::Error;
 }
 
