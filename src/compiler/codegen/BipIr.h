@@ -4,6 +4,7 @@
 
 #include "AnalysisResult.h"
 
+#include <cstddef>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -16,6 +17,7 @@ enum class Operation
 {
     Literal,
     Variable,
+    VectorElement,
     Add,
     Subtract,
     BitwiseAnd,
@@ -41,18 +43,36 @@ struct Expression
 
     ExpressionPtr left;
     ExpressionPtr right;
+    ExpressionPtr index;
 };
 
-struct Assignment
+struct Declaration
 {
+    std::string name;
+    std::size_t size = 1;
+    bool isVector = false;
+};
+
+enum class StatementKind
+{
+    Assignment,
+    Input,
+    Output
+};
+
+struct Statement
+{
+    StatementKind kind = StatementKind::Assignment;
+
     std::string destination;
+    ExpressionPtr destinationIndex;
     ExpressionPtr expression;
 };
 
 struct Program
 {
-    std::vector<std::string> variables;
-    std::vector<Assignment> assignments;
+    std::vector<Declaration> declarations;
+    std::vector<Statement> statements;
 };
 
 class CodegenError : public std::runtime_error
@@ -61,9 +81,9 @@ public:
     explicit CodegenError(
         const std::string &message,
         int position = -1
-    )
+        )
         : std::runtime_error(message),
-          position_(position)
+        position_(position)
     {
     }
 
@@ -82,7 +102,7 @@ public:
     Program build(
         const std::string &source,
         const AnalysisResult &analysis
-    ) const;
+        ) const;
 };
 
 class BipEmitter

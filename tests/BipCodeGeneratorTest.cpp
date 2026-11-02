@@ -181,41 +181,12 @@ fim)";
 
     requireSuccess(result, "Operacoes bit a bit");
 
-    requireContains(
-        result.assembly,
-        "    AND b\n",
-        "AND"
-        );
-
-    requireContains(
-        result.assembly,
-        "    OR b\n",
-        "OR"
-        );
-
-    requireContains(
-        result.assembly,
-        "    XOR b\n",
-        "XOR"
-        );
-
-    requireContains(
-        result.assembly,
-        "    NOT 0\n",
-        "NOT"
-        );
-
-    requireContains(
-        result.assembly,
-        "    SLL 2\n",
-        "SLL"
-        );
-
-    requireContains(
-        result.assembly,
-        "    SRL 1\n",
-        "SRL"
-        );
+    requireContains(result.assembly, "    AND b\n", "AND");
+    requireContains(result.assembly, "    OR b\n", "OR");
+    requireContains(result.assembly, "    XOR b\n", "XOR");
+    requireContains(result.assembly, "    NOT 0\n", "NOT");
+    requireContains(result.assembly, "    SLL 2\n", "SLL");
+    requireContains(result.assembly, "    SRL 1\n", "SRL");
 
     std::cout << "[OK] Operacoes bit a bit\n";
 }
@@ -265,6 +236,325 @@ fim)";
     std::cout << "[OK] Precedencia\n";
 }
 
+void testVectorAndIo()
+{
+    const std::string source = R"(programa vetores
+inicio
+inteiro a, b, valores[3];
+
+a recebe 2;
+valores[0] recebe 10;
+valores[a] recebe valores[0] mais 5;
+b recebe valores[a] eBitBit 7;
+
+leia(valores[1]);
+mostre(b);
+mostre(valores[1]);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireSuccess(result, "Vetores e entrada/saida");
+
+    requireContains(
+        result.assembly,
+        "a: 0\n"
+        "b: 0\n"
+        "valores: 0\n"
+        "__bip_vec_slot_2_1: 0\n"
+        "__bip_vec_slot_2_2: 0\n",
+        "Alocacao contigua de vetor"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LDI 0\n"
+        "    STO $indr\n"
+        "    LDV valores\n"
+        "    ADDI 5\n",
+        "Leitura de vetor em expressao"
+        );
+
+    requireContains(
+        result.assembly,
+        "    STO __bip_tmp_1\n"
+        "    LD __bip_tmp_0\n"
+        "    STO $indr\n"
+        "    LD __bip_tmp_1\n"
+        "    STOV valores\n",
+        "Preservacao do indice na atribuicao"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LD a\n"
+        "    STO $indr\n"
+        "    LDV valores\n"
+        "    ANDI 7\n"
+        "    STO b\n",
+        "Operacao bit a bit com vetor"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LDI 1\n"
+        "    STO $indr\n"
+        "    LD $in_port\n"
+        "    STOV valores\n",
+        "Entrada em vetor"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LD b\n"
+        "    STO $out_port\n",
+        "Saida escalar"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LDI 1\n"
+        "    STO $indr\n"
+        "    LDV valores\n"
+        "    STO $out_port\n",
+        "Saida de vetor"
+        );
+
+    std::cout << "[OK] Vetores e entrada/saida\n";
+}
+
+void testScalarIoAndLiterals()
+{
+    const std::string source = R"(programa entrada
+inicio
+inteiro a, valores[1];
+
+leia(a);
+valores[0] recebe a;
+mostre(42);
+mostre(a);
+mostre(valores[0]);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireSuccess(result, "Entrada escalar e literais");
+
+    requireContains(
+        result.assembly,
+        "    LD $in_port\n"
+        "    STO a\n",
+        "Leitura escalar"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LDI 42\n"
+        "    STO $out_port\n",
+        "Saida literal"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LD a\n"
+        "    STO $out_port\n",
+        "Saida de variavel"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LDI 0\n"
+        "    STO $indr\n"
+        "    LDV valores\n"
+        "    STO $out_port\n",
+        "Saida de vetor unitario"
+        );
+
+    std::cout << "[OK] Entrada escalar e literais\n";
+}
+
+void testExpressionIndex()
+{
+    const std::string source = R"(programa indices
+inicio
+inteiro a, b, valores[4];
+
+a recebe 1;
+b recebe 2;
+
+valores[a mais b] recebe 25;
+valores[0] recebe valores[a mais b] menos 5;
+mostre(valores[0]);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireSuccess(result, "Indice com expressao");
+
+    requireContains(
+        result.assembly,
+        "    LD a\n"
+        "    ADD b\n"
+        "    STO __bip_tmp_0\n",
+        "Calculo do indice de atribuicao"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LD a\n"
+        "    ADD b\n"
+        "    STO $indr\n"
+        "    LDV valores\n"
+        "    SUBI 5\n",
+        "Indice calculado em leitura"
+        );
+
+    std::cout << "[OK] Indices com expressoes\n";
+}
+
+void testNestedVectorAccess()
+{
+    const std::string source = R"(programa aninhado
+inicio
+inteiro valores[3], resultado;
+
+valores[0] recebe 1;
+valores[1] recebe 9;
+valores[valores[0]] recebe valores[1] mais valores[0];
+resultado recebe valores[1];
+mostre(resultado);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireSuccess(result, "Acessos aninhados");
+
+    requireContains(
+        result.assembly,
+        "    LDI 0\n"
+        "    STO $indr\n"
+        "    LDV valores\n"
+        "    STO __bip_tmp_0\n",
+        "Indice obtido de outro elemento"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LD __bip_tmp_0\n"
+        "    STO $indr\n"
+        "    LD __bip_tmp_1\n"
+        "    STOV valores\n",
+        "Indice restaurado apos avaliar RHS"
+        );
+
+    std::cout << "[OK] Acessos aninhados\n";
+}
+
+void testVectorArithmeticAndBitwise()
+{
+    const std::string source = R"(programa operacoes
+inicio
+inteiro a, valores[3], resultado;
+
+a recebe 1;
+valores[0] recebe 5;
+valores[1] recebe 6;
+
+resultado recebe valores[a] mais valores[0];
+resultado recebe valores[a] menos valores[0];
+resultado recebe valores[a] ouBitBit valores[0];
+resultado recebe valores[a] ouExclusivoBitBit 3;
+resultado recebe naoBitBit valores[0];
+resultado recebe valores[a] deslocaEsquerda 1;
+mostre(resultado);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireSuccess(result, "Aritmetica e bits com vetores");
+
+    requireContains(
+        result.assembly,
+        "    ADD __bip_tmp_1\n",
+        "Soma entre elementos"
+        );
+
+    requireContains(
+        result.assembly,
+        "    SUB __bip_tmp_1\n",
+        "Subtracao entre elementos"
+        );
+
+    requireContains(
+        result.assembly,
+        "    OR __bip_tmp_1\n",
+        "OU entre elementos"
+        );
+
+    requireContains(
+        result.assembly,
+        "    XORI 3\n",
+        "XOR com elemento"
+        );
+
+    requireContains(
+        result.assembly,
+        "    NOT 0\n",
+        "Complemento de elemento"
+        );
+
+    requireContains(
+        result.assembly,
+        "    SLL 1\n",
+        "Deslocamento de elemento"
+        );
+
+    std::cout << "[OK] Aritmetica e bits com vetores\n";
+}
+
+void testTemporaryReuse()
+{
+    const std::string source = R"(programa temporarios
+inicio
+inteiro a, valores[3];
+
+a recebe 0;
+valores[a] recebe valores[0] mais 1;
+valores[a] recebe valores[0] mais 2;
+valores[a] recebe valores[0] mais 3;
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireSuccess(result, "Reutilizacao de temporarios");
+
+    requireContains(
+        result.assembly,
+        "__bip_tmp_0: 0",
+        "Primeiro temporario"
+        );
+
+    requireContains(
+        result.assembly,
+        "__bip_tmp_1: 0",
+        "Segundo temporario"
+        );
+
+    require(
+        result.assembly.find("__bip_tmp_2: 0") ==
+            std::string::npos,
+        "Temporarios nao foram reutilizados."
+        );
+
+    std::cout << "[OK] Reutilizacao de temporarios\n";
+}
+
 void testUnsupportedMultiplication()
 {
     const std::string source = R"(programa multiplicacao
@@ -284,21 +574,6 @@ fim)";
     std::cout << "[OK] Multiplicacao recusada\n";
 }
 
-void testUnsupportedVector()
-{
-    const std::string source = R"(programa vetor
-inicio
-inteiro numeros[3];
-fim)";
-
-    const bip::BipCodeGenerator generator;
-    const auto result = generator.generate(source);
-
-    requireFailure(result, "Vetor sem suporte");
-
-    std::cout << "[OK] Vetor recusado\n";
-}
-
 void testUnsupportedDynamicShift()
 {
     const std::string source = R"(programa deslocamento
@@ -307,7 +582,6 @@ inteiro a, quantidade, resultado;
 
 a recebe 8;
 quantidade recebe 2;
-
 resultado recebe a deslocaEsquerda quantidade;
 fim)";
 
@@ -357,21 +631,23 @@ fim)";
     std::cout << "[OK] Erro semantico bloqueia geracao\n";
 }
 
-void testUnsupportedOutput()
+void testOutOfBoundsLiteral()
 {
-    const std::string source = R"(programa saida
+    const std::string source = R"(programa limite
 inicio
-inteiro a;
-a recebe 10;
-mostre(a);
+inteiro valores[3];
+valores[3] recebe 10;
 fim)";
 
     const bip::BipCodeGenerator generator;
     const auto result = generator.generate(source);
 
-    requireFailure(result, "Saida sem suporte");
+    requireFailure(
+        result,
+        "Indice literal fora dos limites"
+        );
 
-    std::cout << "[OK] Saida recusada\n";
+    std::cout << "[OK] Indice literal invalido recusado\n";
 }
 
 }
@@ -384,22 +660,29 @@ int main()
         testCompositeExpressions();
         testBitwiseOperators();
         testPrecedence();
+
+        testVectorAndIo();
+        testScalarIoAndLiterals();
+        testExpressionIndex();
+        testNestedVectorAccess();
+        testVectorArithmeticAndBitwise();
+        testTemporaryReuse();
+
         testUnsupportedMultiplication();
-        testUnsupportedVector();
         testUnsupportedDynamicShift();
         testUnsupportedLargeImmediate();
         testSemanticFailure();
-        testUnsupportedOutput();
+        testOutOfBoundsLiteral();
 
         std::cout
-            << "Todos os testes do nucleo BIP passaram.\n";
+            << "Todos os testes do gerador BIP passaram.\n";
 
         return 0;
     }
     catch (const std::exception &error)
     {
         std::cerr
-            << "Falha nos testes do nucleo BIP: "
+            << "Falha nos testes do gerador BIP: "
             << error.what()
             << '\n';
 
