@@ -1,4 +1,5 @@
-﻿cmake_minimum_required(VERSION 3.16)
+﻿
+cmake_minimum_required(VERSION 3.16)
 
 project(compiler VERSION 0.1 LANGUAGES CXX)
 
@@ -49,6 +50,13 @@ add_library(compiler_core STATIC
     src/compiler/semantic/DeclarationProcessor.cpp
     src/compiler/semantic/DeclarationProcessor.h
 
+    # Gerador de Assembly BIP
+    src/compiler/codegen/BipIr.h
+    src/compiler/codegen/BipIrBuilder.cpp
+    src/compiler/codegen/BipEmitter.cpp
+    src/compiler/codegen/BipCodeGenerator.h
+    src/compiler/codegen/BipCodeGenerator.cpp
+
     # Código gerado pelo WebGALS
     generated/webgals/Constants.cpp
     generated/webgals/Constants.h
@@ -77,6 +85,7 @@ target_include_directories(compiler_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src/compiler
         ${CMAKE_CURRENT_SOURCE_DIR}/src/compiler/semantic
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/compiler/codegen
 
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/generated/webgals
@@ -272,6 +281,26 @@ if(BUILD_TESTING)
     add_test(
         NAME semantic_integration_test
         COMMAND semantic_integration_test
+    )
+
+    # ========================================================
+    # TESTES DE GERAÇÃO DE ASSEMBLY BIP
+    # ========================================================
+
+    add_executable(bip_codegen_test
+
+        tests/BipCodeGeneratorTest.cpp
+    )
+
+    target_link_libraries(bip_codegen_test
+
+        PRIVATE
+            compiler_core
+    )
+
+    add_test(
+        NAME bip_codegen_test
+        COMMAND bip_codegen_test
     )
 
 endif()
