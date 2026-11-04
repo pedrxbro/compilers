@@ -10,7 +10,8 @@ enum class AnalysisPhase
 {
     Lexical,
     Syntactic,
-    Semantic
+    Semantic,
+    CodeGeneration
 };
 
 struct AnalysisDiagnostic
@@ -41,12 +42,16 @@ struct AnalysisResult
     std::string message;
     int position = -1;
 
-    // Estrutura preparada para transportar vários diagnósticos.
+    // Estrutura preparada para transportar varios diagnosticos.
     std::vector<AnalysisDiagnostic> errors;
     std::vector<AnalysisDiagnostic> warnings;
 
-    // Snapshot da tabela de símbolos produzido pela análise.
+    // Snapshot da tabela de simbolos produzido pela analise.
     std::vector<SymbolTableEntry> symbolTable;
+
+    // Assembly completo gerado para um programa valido.
+    // Deve permanecer vazio quando a compilacao falhar.
+    std::string assembly;
 };
 
 #endif

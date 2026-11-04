@@ -1,5 +1,7 @@
 #include "CompilerService.h"
 
+#include "BipCodeGenerator.h"
+
 #include "Lexico.h"
 #include "Sintatico.h"
 #include "Semantico.h"
@@ -11,6 +13,7 @@
 #include "Symbol.h"
 #include "SemanticTypes.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -84,6 +87,9 @@ std::string phaseToString(
 
     case AnalysisPhase::Semantic:
         return "semantico";
+
+    case AnalysisPhase::CodeGeneration:
+        return "geracao BIP";
     }
 
     return "desconhecido";
@@ -211,6 +217,32 @@ std::string buildMessage(
     return message;
 }
 
+void appendCodegenWarnings(
+    const bip::CodegenResult &codegen,
+    AnalysisResult &result
+    )
+{
+    for (const AnalysisDiagnostic &warning : codegen.warnings)
+    {
+        const bool alreadyPresent =
+            std::any_of(
+                result.warnings.begin(),
+                result.warnings.end(),
+                [&warning](const AnalysisDiagnostic &existing)
+                {
+                    return existing.phase == warning.phase &&
+                           existing.message == warning.message &&
+                           existing.position == warning.position;
+                }
+                );
+
+        if (!alreadyPresent)
+        {
+            result.warnings.push_back(warning);
+        }
+    }
+}
+
 }
 
 AnalysisResult CompilerService::analyze(
@@ -288,6 +320,81 @@ AnalysisResult CompilerService::analyze(
         buildMessage(
             result
             );
+
+    return result;
+}
+
+AnalysisResult CompilerService::compile(
+    const std::string &source
+    ) const
+{
+    AnalysisResult result = analyze(source);
+
+    // Nenhuma compilacao reutiliza Assembly anterior.
+    result.assembly.clear();
+
+    // Erros nas analises impedem a geracao.
+    if (!result.success || !result.errors.empty())
+    {
+        result.success = false;
+        return result;
+    }
+
+    // A geracao recebe a tabela e a analise ja validadas.
+    const bip::BipCodeGenerator generator;
+
+    const bip::CodegenResult codegen =
+        generator.generate(source, result);
+
+    appendCodegenWarnings(
+        codegen,
+        result
+        );
+
+    if (!codegen.success || codegen.assembly.empty())
+    {
+        result.success = false;
+        result.assembly.clear();
+
+        std::string diagnosticMessage;
+
+        if (codegen.success)
+        {
+            diagnosticMessage =
+                "O gerador BIP retornou Assembly vazio.";
+        }
+        else if (codegen.message.empty())
+        {
+            diagnosticMessage =
+                "A geracao BIP falhou sem diagnostico.";
+        }
+        else
+        {
+            diagnosticMessage = codegen.message;
+        }
+
+        result.errors.push_back(
+            {
+                AnalysisPhase::CodeGeneration,
+                diagnosticMessage,
+                codegen.position
+            }
+            );
+
+        result.position = codegen.position;
+        result.message = buildMessage(result);
+
+        return result;
+    }
+
+    // O Assembly somente e publicado apos sucesso total.
+    result.assembly = codegen.assembly;
+    result.success = true;
+
+    result.message =
+        buildMessage(result) +
+        "\n" +
+        codegen.message;
 
     return result;
 }

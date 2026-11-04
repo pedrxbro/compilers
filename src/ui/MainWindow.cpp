@@ -1,5 +1,4 @@
-﻿
-#include "MainWindow.h"
+﻿#include "MainWindow.h"
 #include "ui_MainWindow.h"
 
 #include "CompilerService.h"
@@ -21,29 +20,30 @@ MainWindow::MainWindow(QWidget *parent)
         this,
         [this]()
         {
-            // Limpa os resultados da compilação anterior.
+            // Limpa os resultados da compilacao anterior.
             ui->messagesArea->clear();
             ui->symbolTable->setRowCount(0);
+            ui->assemblyArea->clear();
 
-            // Exibe a aba de mensagens durante a compilação.
+            // Exibe a aba de mensagens durante a compilacao.
             ui->resultsTabs->setCurrentWidget(
                 ui->messagesTab
                 );
 
-            // Obtém o código-fonte do editor.
+            // Obtem o codigo-fonte do editor.
             const std::string source =
                 ui->sourceEditor
                     ->toPlainText()
                     .toUtf8()
                     .toStdString();
 
-            // Executa a análise pelo CompilerService.
+            // Executa o fluxo completo pelo CompilerService.
             const CompilerService compilerService;
 
             const AnalysisResult result =
-                compilerService.analyze(source);
+                compilerService.compile(source);
 
-            // Apresenta as mensagens da compilação.
+            // Apresenta as mensagens da compilacao.
             QString message =
                 QString::fromUtf8(
                     result.message.c_str()
@@ -60,7 +60,7 @@ MainWindow::MainWindow(QWidget *parent)
                 message
                 );
 
-            // Prepara a tabela com os símbolos recebidos.
+            // Prepara a tabela com os simbolos recebidos.
             ui->symbolTable->setRowCount(
                 static_cast<int>(
                     result.symbolTable.size()
@@ -143,6 +143,16 @@ MainWindow::MainWindow(QWidget *parent)
 
             // Ajusta as larguras para facilitar a leitura.
             ui->symbolTable->resizeColumnsToContents();
+
+            // Publica somente Assembly completo e valido.
+            if (result.success && !result.assembly.empty())
+            {
+                ui->assemblyArea->setPlainText(
+                    QString::fromUtf8(
+                        result.assembly.c_str()
+                        )
+                    );
+            }
         }
         );
 }

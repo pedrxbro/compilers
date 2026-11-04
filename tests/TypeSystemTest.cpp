@@ -260,8 +260,56 @@ void testAssignments()
         SemanticTable::atribType(
             DataType::Text,
             DataType::Character
+            ) == CompatibilityResult::Ok,
+        "TEXTO <- CARACTERE deveria ser OK."
+        );
+
+    require(
+        SemanticTable::atribType(
+            DataType::Text,
+            DataType::Text
+            ) == CompatibilityResult::Ok,
+        "TEXTO <- TEXTO deveria ser OK."
+        );
+
+    require(
+        SemanticTable::atribType(
+            DataType::Character,
+            DataType::Character
+            ) == CompatibilityResult::Ok,
+        "CARACTERE <- CARACTERE deveria ser OK."
+        );
+
+    require(
+        SemanticTable::atribType(
+            DataType::Character,
+            DataType::Text
             ) == CompatibilityResult::Error,
-        "TEXTO <- CARACTERE deveria ser ERRO."
+        "CARACTERE <- TEXTO deveria ser ERRO."
+        );
+
+    require(
+        SemanticTable::atribType(
+            DataType::Text,
+            DataType::Integer
+            ) == CompatibilityResult::Error,
+        "TEXTO <- INTEIRO deveria ser ERRO."
+        );
+
+    require(
+        SemanticTable::atribType(
+            DataType::Text,
+            DataType::Float
+            ) == CompatibilityResult::Error,
+        "TEXTO <- FLUTUANTE deveria ser ERRO."
+        );
+
+    require(
+        SemanticTable::atribType(
+            DataType::Text,
+            DataType::Logical
+            ) == CompatibilityResult::Error,
+        "TEXTO <- LOGICO deveria ser ERRO."
         );
 
     require(
@@ -270,6 +318,22 @@ void testAssignments()
             DataType::Integer
             ) == CompatibilityResult::Error,
         "LOGICO <- INTEIRO deveria ser ERRO."
+        );
+
+    require(
+        SemanticTable::atribType(
+            DataType::Text,
+            DataType::Unknown
+            ) == CompatibilityResult::Error,
+        "TEXTO <- DESCONHECIDO deveria ser ERRO."
+        );
+
+    require(
+        SemanticTable::atribType(
+            DataType::Unknown,
+            DataType::Character
+            ) == CompatibilityResult::Error,
+        "DESCONHECIDO <- CARACTERE deveria ser ERRO."
         );
 }
 
@@ -511,6 +575,138 @@ fim
         invalidCondition,
         "Condicao deve resultar em LOGICO",
         "Condicao nao logica"
+        );
+
+    // Atribuicao direta de literal CARACTERE para TEXTO.
+    const std::string characterLiteralToText =
+        R"(
+programa caractereLiteralParaTexto
+inicio
+texto mensagem;
+
+mensagem recebe 'B';
+mostre(mensagem);
+fim
+)";
+
+    expectSuccess(
+        compiler,
+        characterLiteralToText,
+        "TEXTO recebe literal CARACTERE"
+        );
+
+    // Atribuicao de uma variavel CARACTERE para TEXTO.
+    const std::string characterVariableToText =
+        R"(
+programa caractereVariavelParaTexto
+inicio
+texto mensagem;
+caractere letra;
+
+letra recebe 'A';
+mensagem recebe letra;
+mostre(mensagem);
+fim
+)";
+
+    expectSuccess(
+        compiler,
+        characterVariableToText,
+        "TEXTO recebe variavel CARACTERE"
+        );
+
+    // Atribuicao inversa direta continua proibida.
+    const std::string textLiteralToCharacter =
+        R"(
+programa textoLiteralParaCaractere
+inicio
+caractere letra;
+
+letra recebe "AB";
+fim
+)";
+
+    expectFailureContaining(
+        compiler,
+        textLiteralToCharacter,
+        "Atribuicao incompativel",
+        "CARACTERE nao recebe literal TEXTO"
+        );
+
+    // Atribuicao inversa entre variaveis continua proibida.
+    const std::string textVariableToCharacter =
+        R"(
+programa textoVariavelParaCaractere
+inicio
+texto mensagem;
+caractere letra;
+
+mensagem recebe "AB";
+letra recebe mensagem;
+fim
+)";
+
+    expectFailureContaining(
+        compiler,
+        textVariableToCharacter,
+        "Atribuicao incompativel",
+        "CARACTERE nao recebe variavel TEXTO"
+        );
+
+    // Inteiros nao podem ser atribuidos diretamente a TEXTO.
+    const std::string integerLiteralToText =
+        R"(
+programa inteiroLiteralParaTexto
+inicio
+texto mensagem;
+
+mensagem recebe 42;
+fim
+)";
+
+    expectFailureContaining(
+        compiler,
+        integerLiteralToText,
+        "Atribuicao incompativel",
+        "TEXTO nao recebe literal INTEIRO"
+        );
+
+    // Variaveis INTEIRO tambem nao podem ser atribuidas a TEXTO.
+    const std::string integerVariableToText =
+        R"(
+programa inteiroVariavelParaTexto
+inicio
+inteiro numero;
+texto mensagem;
+
+numero recebe 42;
+mensagem recebe numero;
+fim
+)";
+
+    expectFailureContaining(
+        compiler,
+        integerVariableToText,
+        "Atribuicao incompativel",
+        "TEXTO nao recebe variavel INTEIRO"
+        );
+
+    // Flutuantes tambem permanecem incompativeis com TEXTO.
+    const std::string floatLiteralToText =
+        R"(
+programa flutuanteLiteralParaTexto
+inicio
+texto mensagem;
+
+mensagem recebe 2.5;
+fim
+)";
+
+    expectFailureContaining(
+        compiler,
+        floatLiteralToText,
+        "Atribuicao incompativel",
+        "TEXTO nao recebe literal FLUTUANTE"
         );
 }
 
