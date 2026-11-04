@@ -1,4 +1,3 @@
-
 #include "BipCodeGenerator.h"
 
 #include "BipIr.h"
@@ -15,16 +14,24 @@ CodegenResult BipCodeGenerator::generate(
     const std::string &source
     ) const
 {
-    CodegenResult result;
-
     const CompilerService compiler;
 
     const AnalysisResult analysis =
         compiler.analyze(source);
 
+    return generate(source, analysis);
+}
+
+CodegenResult BipCodeGenerator::generate(
+    const std::string &source,
+    const AnalysisResult &analysis
+    ) const
+{
+    CodegenResult result;
+
     result.warnings = analysis.warnings;
 
-    if (!analysis.success)
+    if (!analysis.success || !analysis.errors.empty())
     {
         result.success = false;
 
@@ -49,6 +56,19 @@ CodegenResult BipCodeGenerator::generate(
 
         const std::string assembly =
             emitter.emit(program);
+
+        if (assembly.empty())
+        {
+            result.success = false;
+
+            result.message =
+                "Erro de geracao BIP: "
+                "o emissor retornou Assembly vazio.";
+
+            result.assembly.clear();
+
+            return result;
+        }
 
         result.success = true;
         result.assembly = assembly;

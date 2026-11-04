@@ -1,5 +1,4 @@
-﻿
-cmake_minimum_required(VERSION 3.16)
+﻿cmake_minimum_required(VERSION 3.16)
 
 project(compiler VERSION 0.1 LANGUAGES CXX)
 
@@ -301,6 +300,26 @@ if(BUILD_TESTING)
     add_test(
         NAME bip_codegen_test
         COMMAND bip_codegen_test
+    )
+
+    # ========================================================
+    # TESTES DE INTEGRACAO DO ASSEMBLY COM A IDE
+    # ========================================================
+
+    add_executable(bip_ide_integration_test
+
+        tests/BipIdeIntegrationTest.cpp
+    )
+
+    target_link_libraries(bip_ide_integration_test
+
+        PRIVATE
+            compiler_core
+    )
+
+    add_test(
+        NAME bip_ide_integration_test
+        COMMAND bip_ide_integration_test
     )
 
 endif()

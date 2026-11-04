@@ -1,4 +1,3 @@
-
 #include "BipIr.h"
 
 #include "Constants.h"

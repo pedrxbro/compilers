@@ -132,13 +132,13 @@ fim)";
 
     requireContains(
         result.assembly,
-        "__bip_tmp_0: 0",
+        "temp1: 0",
         "Temporario esquerdo"
         );
 
     requireContains(
         result.assembly,
-        "__bip_tmp_1: 0",
+        "temp2: 0",
         "Temporario direito"
         );
 
@@ -146,12 +146,12 @@ fim)";
         result.assembly,
         "    LD a\n"
         "    ADDI 2\n"
-        "    STO __bip_tmp_0\n"
+        "    STO temp1\n"
         "    LD b\n"
         "    SUBI 1\n"
-        "    STO __bip_tmp_1\n"
-        "    LD __bip_tmp_0\n"
-        "    SUB __bip_tmp_1\n"
+        "    STO temp2\n"
+        "    LD temp1\n"
+        "    SUB temp2\n"
         "    STO resultado\n",
         "Ordem dos operandos"
         );
@@ -262,8 +262,8 @@ fim)";
         "a: 0\n"
         "b: 0\n"
         "valores: 0\n"
-        "__bip_vec_slot_2_1: 0\n"
-        "__bip_vec_slot_2_2: 0\n",
+        "valores_1: 0\n"
+        "valores_2: 0\n",
         "Alocacao contigua de vetor"
         );
 
@@ -278,10 +278,10 @@ fim)";
 
     requireContains(
         result.assembly,
-        "    STO __bip_tmp_1\n"
-        "    LD __bip_tmp_0\n"
+        "    STO temp2\n"
+        "    LD temp1\n"
         "    STO $indr\n"
-        "    LD __bip_tmp_1\n"
+        "    LD temp2\n"
         "    STOV valores\n",
         "Preservacao do indice na atribuicao"
         );
@@ -398,7 +398,7 @@ fim)";
         result.assembly,
         "    LD a\n"
         "    ADD b\n"
-        "    STO __bip_tmp_0\n",
+        "    STO temp1\n",
         "Calculo do indice de atribuicao"
         );
 
@@ -438,15 +438,15 @@ fim)";
         "    LDI 0\n"
         "    STO $indr\n"
         "    LDV valores\n"
-        "    STO __bip_tmp_0\n",
+        "    STO temp1\n",
         "Indice obtido de outro elemento"
         );
 
     requireContains(
         result.assembly,
-        "    LD __bip_tmp_0\n"
+        "    LD temp1\n"
         "    STO $indr\n"
-        "    LD __bip_tmp_1\n"
+        "    LD temp2\n"
         "    STOV valores\n",
         "Indice restaurado apos avaliar RHS"
         );
@@ -480,19 +480,19 @@ fim)";
 
     requireContains(
         result.assembly,
-        "    ADD __bip_tmp_1\n",
+        "    ADD temp2\n",
         "Soma entre elementos"
         );
 
     requireContains(
         result.assembly,
-        "    SUB __bip_tmp_1\n",
+        "    SUB temp2\n",
         "Subtracao entre elementos"
         );
 
     requireContains(
         result.assembly,
-        "    OR __bip_tmp_1\n",
+        "    OR temp2\n",
         "OU entre elementos"
         );
 
@@ -536,23 +536,189 @@ fim)";
 
     requireContains(
         result.assembly,
-        "__bip_tmp_0: 0",
+        "temp1: 0",
         "Primeiro temporario"
         );
 
     requireContains(
         result.assembly,
-        "__bip_tmp_1: 0",
+        "temp2: 0",
         "Segundo temporario"
         );
 
     require(
-        result.assembly.find("__bip_tmp_2: 0") ==
+        result.assembly.find("temp3: 0") ==
             std::string::npos,
         "Temporarios nao foram reutilizados."
         );
 
     std::cout << "[OK] Reutilizacao de temporarios\n";
+}
+
+void testReadableNamesAndVectorExpression()
+{
+    const std::string source = R"(programa testeBip
+inicio
+inteiro i, a, b, c, d;
+inteiro v[5], x[6], z[6];
+
+i recebe 1;
+a recebe 1;
+b recebe 2;
+c recebe 3;
+d recebe 2;
+
+x[3] recebe 20;
+z[4] recebe 7;
+
+v[i mais 1] recebe x[a mais b] menos z[c mais d menos 1];
+
+mostre(v[2]);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireSuccess(
+        result,
+        "Nomes legiveis e expressao entre vetores"
+        );
+
+    requireContains(
+        result.assembly,
+        "v: 0\n"
+        "v_1: 0\n"
+        "v_2: 0\n"
+        "v_3: 0\n"
+        "v_4: 0\n"
+        "x: 0\n"
+        "x_1: 0\n"
+        "x_2: 0\n"
+        "x_3: 0\n"
+        "x_4: 0\n"
+        "x_5: 0\n"
+        "z: 0\n"
+        "z_1: 0\n"
+        "z_2: 0\n"
+        "z_3: 0\n"
+        "z_4: 0\n"
+        "z_5: 0\n",
+        "Reserva de memoria com nomes legiveis"
+        );
+
+    requireContains(
+        result.assembly,
+        "temp1: 0\n"
+        "temp2: 0\n"
+        "temp3: 0\n",
+        "Tres temporarios com nomes legiveis"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LD i\n"
+        "    ADDI 1\n"
+        "    STO temp1\n"
+        "    LD a\n"
+        "    ADD b\n"
+        "    STO $indr\n"
+        "    LDV x\n"
+        "    STO temp2\n"
+        "    LD c\n"
+        "    ADD d\n"
+        "    SUBI 1\n"
+        "    STO $indr\n"
+        "    LDV z\n"
+        "    STO temp3\n"
+        "    LD temp2\n"
+        "    SUB temp3\n"
+        "    STO temp2\n"
+        "    LD temp1\n"
+        "    STO $indr\n"
+        "    LD temp2\n"
+        "    STOV v\n",
+        "Indices e valor da atribuicao preservados"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LDI 2\n"
+        "    STO $indr\n"
+        "    LDV v\n"
+        "    STO $out_port\n",
+        "Saida do resultado do vetor"
+        );
+
+    requireContains(
+        result.assembly,
+        "    HLT 0\n",
+        "Finalizacao do programa"
+        );
+
+    std::cout
+        << "[OK] Nomes legiveis e expressao entre vetores\n";
+}
+
+void testNameCollisions()
+{
+    const std::string source = R"(programa conflitos
+inicio
+inteiro v[3], v_1, temp1, resultado;
+
+v_1 recebe 10;
+temp1 recebe 7;
+
+v[1] recebe v_1 menos temp1;
+
+resultado recebe v[1];
+mostre(resultado);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireSuccess(result, "Conflitos de nomes auxiliares");
+
+    // v_1 e uma variavel do usuario. O elemento
+    // v[1] precisa receber outro rotulo.
+    requireContains(
+        result.assembly,
+        "v: 0\n"
+        "__bip_vec_slot_0_1: 0\n"
+        "v_2: 0\n"
+        "v_1: 0\n",
+        "Colisao de nome de posicao de vetor"
+        );
+
+    // temp1 tambem pertence ao usuario. Os
+    // temporarios gerados devem comecar em temp2.
+    requireContains(
+        result.assembly,
+        "temp1: 0\n"
+        "resultado: 0\n"
+        "temp2: 0\n"
+        "temp3: 0\n",
+        "Colisao de nome de temporario"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LD v_1\n"
+        "    SUB temp1\n",
+        "Variaveis do usuario preservadas"
+        );
+
+    requireContains(
+        result.assembly,
+        "    STO temp3\n"
+        "    LD temp2\n"
+        "    STO $indr\n"
+        "    LD temp3\n"
+        "    STOV v\n",
+        "Atribuicao ao vetor sem conflito"
+        );
+
+    std::cout << "[OK] Conflitos de nomes auxiliares\n";
 }
 
 void testUnsupportedMultiplication()
@@ -667,6 +833,9 @@ int main()
         testNestedVectorAccess();
         testVectorArithmeticAndBitwise();
         testTemporaryReuse();
+
+        testReadableNamesAndVectorExpression();
+        testNameCollisions();
 
         testUnsupportedMultiplication();
         testUnsupportedDynamicShift();

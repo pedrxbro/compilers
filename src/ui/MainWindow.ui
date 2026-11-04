@@ -48,7 +48,7 @@
      <number>10</number>
     </property>
 
-    <!-- Cabeçalho -->
+    <!-- Cabecalho -->
     <item>
      <layout class="QHBoxLayout" name="headerLayout">
 
@@ -113,7 +113,7 @@
      </layout>
     </item>
 
-    <!-- Editor de código-fonte -->
+    <!-- Editor de codigo-fonte -->
     <item>
      <widget class="QPlainTextEdit" name="sourceEditor">
 
@@ -142,7 +142,7 @@
      </widget>
     </item>
 
-    <!-- Abas dos resultados da compilação -->
+    <!-- Abas dos resultados da compilacao -->
     <item>
      <widget class="QTabWidget" name="resultsTabs">
 
@@ -249,7 +249,7 @@
        </layout>
       </widget>
 
-      <!-- Aba da tabela de símbolos -->
+      <!-- Aba da tabela de simbolos -->
       <widget class="QWidget" name="symbolsTab">
 
        <attribute name="title">
@@ -383,6 +383,91 @@
             <string>Usado</string>
            </property>
           </column>
+
+         </widget>
+        </item>
+
+       </layout>
+      </widget>
+
+      <!-- Aba do Assembly BIP -->
+      <widget class="QWidget" name="assemblyTab">
+
+       <attribute name="title">
+        <string>Assembly BIP</string>
+       </attribute>
+
+       <layout class="QVBoxLayout" name="assemblyTabLayout">
+
+        <property name="leftMargin">
+         <number>8</number>
+        </property>
+
+        <property name="topMargin">
+         <number>8</number>
+        </property>
+
+        <property name="rightMargin">
+         <number>8</number>
+        </property>
+
+        <property name="bottomMargin">
+         <number>8</number>
+        </property>
+
+        <property name="spacing">
+         <number>6</number>
+        </property>
+
+        <item>
+         <widget class="QLabel" name="assemblyLabel">
+
+          <property name="font">
+           <font>
+            <pointsize>11</pointsize>
+            <bold>true</bold>
+           </font>
+          </property>
+
+          <property name="text">
+           <string>Código Assembly BIP gerado</string>
+          </property>
+
+         </widget>
+        </item>
+
+        <item>
+         <widget class="QPlainTextEdit" name="assemblyArea">
+
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>140</height>
+           </size>
+          </property>
+
+          <property name="font">
+           <font>
+            <family>Consolas</family>
+            <pointsize>12</pointsize>
+           </font>
+          </property>
+
+          <property name="placeholderText">
+           <string>O Assembly BIP será exibido após uma compilação bem-sucedida.</string>
+          </property>
+
+          <property name="undoRedoEnabled">
+           <bool>false</bool>
+          </property>
+
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+
+          <property name="lineWrapMode">
+           <enum>QPlainTextEdit::NoWrap</enum>
+          </property>
 
          </widget>
         </item>

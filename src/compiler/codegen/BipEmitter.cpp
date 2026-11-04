@@ -162,8 +162,7 @@ public:
                      ++j)
                 {
                     output
-                        << "__bip_vec_slot_"
-                        << i << "_" << j
+                        << vectorSlotName(i, j)
                         << ": 0\n";
                 }
             }
@@ -186,6 +185,33 @@ public:
     }
 
 private:
+    // Usa nomes legiveis, como v_1 e valores_2.
+    // Se o nome ja pertence a uma variavel declarada,
+    // preserva a nomenclatura interna anterior para
+    // impedir dois rotulos com o mesmo nome.
+    std::string vectorSlotName(
+        std::size_t declarationIndex,
+        std::size_t elementIndex
+        ) const
+    {
+        const Declaration &declaration =
+            program_.declarations[declarationIndex];
+
+        const std::string preferredName =
+            declaration.name + "_" +
+            std::to_string(elementIndex);
+
+        if (declarations_.count(preferredName) == 0)
+        {
+            return preferredName;
+        }
+
+        return "__bip_vec_slot_" +
+               std::to_string(declarationIndex) +
+               "_" +
+               std::to_string(elementIndex);
+    }
+
     const Declaration &requireDeclaration(
         const std::string &name
         ) const
@@ -286,16 +312,16 @@ private:
             }
         }
 
-        const std::string name =
-            "__bip_tmp_" +
-            std::to_string(temporaries_.size());
+        // A numeracao comeca em 1 e nao reutiliza
+        // nomes que ja pertencem ao codigo fonte.
+        std::string name;
 
-        if (declarations_.count(name) != 0)
+        do
         {
-            throw CodegenError(
-                "Conflito com temporario: " + name
-                );
+            name = "temp" +
+                   std::to_string(nextTemporaryId_++);
         }
+        while (declarations_.count(name) != 0);
 
         temporaries_.push_back(
             {name, true}
@@ -705,6 +731,7 @@ private:
     std::unordered_map<std::string, Declaration> declarations_;
 
     std::size_t dataCells_ = 0;
+    std::size_t nextTemporaryId_ = 1;
 
     std::vector<Temporary> temporaries_;
     std::vector<std::string> instructions_;

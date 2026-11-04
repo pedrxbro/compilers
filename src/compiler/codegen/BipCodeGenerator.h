@@ -1,4 +1,3 @@
-
 #ifndef BIP_CODE_GENERATOR_H
 #define BIP_CODE_GENERATOR_H
 
@@ -25,8 +24,15 @@ struct CodegenResult
 class BipCodeGenerator
 {
 public:
+    // API original: realiza a analise antes de gerar.
     CodegenResult generate(
         const std::string &source
+        ) const;
+
+    // Nova API: utiliza a analise ja realizada.
+    CodegenResult generate(
+        const std::string &source,
+        const AnalysisResult &analysis
         ) const;
 };
 
