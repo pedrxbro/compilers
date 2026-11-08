@@ -144,28 +144,26 @@ public:
 
         output << ".data\n";
 
-        for (std::size_t i = 0;
-             i < program_.declarations.size();
-             ++i)
+        // Declara variaveis escalares e vetores.
+        // Vetores sao representados por uma unica
+        // declaracao com os elementos separados
+        // por virgulas, conforme o formato BIP.
+        for (const Declaration &declaration :
+             program_.declarations)
         {
-            const Declaration &declaration =
-                program_.declarations[i];
+            output << declaration.name << ": 0";
 
-            output << declaration.name << ": 0\n";
-
-            // Cada elemento adicional ocupa uma celula.
-            // A sequencia comeca no rotulo do vetor.
             if (declaration.isVector)
             {
                 for (std::size_t j = 1;
                      j < declaration.size;
                      ++j)
                 {
-                    output
-                        << vectorSlotName(i, j)
-                        << ": 0\n";
+                    output << ", 0";
                 }
             }
+
+            output << '\n';
         }
 
         for (const Temporary &temporary : temporaries_)
@@ -185,33 +183,6 @@ public:
     }
 
 private:
-    // Usa nomes legiveis, como v_1 e valores_2.
-    // Se o nome ja pertence a uma variavel declarada,
-    // preserva a nomenclatura interna anterior para
-    // impedir dois rotulos com o mesmo nome.
-    std::string vectorSlotName(
-        std::size_t declarationIndex,
-        std::size_t elementIndex
-        ) const
-    {
-        const Declaration &declaration =
-            program_.declarations[declarationIndex];
-
-        const std::string preferredName =
-            declaration.name + "_" +
-            std::to_string(elementIndex);
-
-        if (declarations_.count(preferredName) == 0)
-        {
-            return preferredName;
-        }
-
-        return "__bip_vec_slot_" +
-               std::to_string(declarationIndex) +
-               "_" +
-               std::to_string(elementIndex);
-    }
-
     const Declaration &requireDeclaration(
         const std::string &name
         ) const
