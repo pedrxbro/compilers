@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -87,6 +88,40 @@ ExpressionPtr makeBinary(
     expression->left = std::move(left);
     expression->right = std::move(right);
     return expression;
+}
+
+// Reconhece indices literais, inclusive quando envolvidos
+// por uma ou mais negacoes unarias.
+//
+// Nao avalia expressoes dinamicas nem altera a IR.
+// Os parenteses ja sao tratados pelo parser.
+
+std::optional<long long> literalIndexValue(
+    const ExpressionPtr &expression
+    )
+{
+    if (!expression)
+    {
+        return std::nullopt;
+    }
+
+    if (expression->operation == Operation::Literal)
+    {
+        return static_cast<long long>(expression->value);
+    }
+
+    if (expression->operation == Operation::Negate)
+    {
+        const auto operand =
+            literalIndexValue(expression->left);
+
+        if (operand.has_value())
+        {
+            return -operand.value();
+        }
+    }
+
+    return std::nullopt;
 }
 
 int precedence(TokenId id)
@@ -385,9 +420,8 @@ private:
                 );
         }
 
-        const auto found = knownSymbols_.find(
-            token.lexeme
-            );
+        const auto found =
+            knownSymbols_.find(token.lexeme);
 
         if (found == knownSymbols_.end())
         {
@@ -442,10 +476,7 @@ private:
                         );
                 }
 
-                size = static_cast<std::size_t>(
-                    parsedSize
-                    );
-
+                size = static_cast<std::size_t>(parsedSize);
                 isVector = true;
 
                 consume(
@@ -464,9 +495,7 @@ private:
                     );
             }
 
-            if (!declaredNames_.insert(
-                                   identifier.lexeme
-                                   ).second)
+            if (!declaredNames_.insert(identifier.lexeme).second)
             {
                 throw CodegenError(
                     "Declaracao duplicada no IR: " +
@@ -527,14 +556,19 @@ private:
                 "Colchete de fechamento esperado."
                 );
 
-            if (target.index->operation ==
-                Operation::Literal)
+            // Valida indices literais positivos e negativos.
+            // Indices dinamicos continuam sendo calculados
+            // durante a execucao do Assembly.
+
+            const auto literal =
+                literalIndexValue(target.index);
+
+            if (literal.has_value())
             {
-                const int value = target.index->value;
+                const long long value = literal.value();
 
                 if (value < 0 ||
-                    static_cast<std::size_t>(value) >=
-                        symbol.size)
+                    static_cast<std::size_t>(value) >= symbol.size)
                 {
                     throw CodegenError(
                         "Indice literal fora dos limites "
@@ -647,9 +681,7 @@ private:
             }
             else
             {
-                expression = makeVariable(
-                    target.name
-                    );
+                expression = makeVariable(target.name);
             }
         }
         else
@@ -781,9 +813,7 @@ private:
                     );
             }
 
-            return makeVariable(
-                target.name
-                );
+            return makeVariable(target.name);
         }
 
         fail(

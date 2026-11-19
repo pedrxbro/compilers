@@ -1,12 +1,19 @@
-
 #include "BipCodeGenerator.h"
 
+#include <cstddef>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace
 {
+
+// ============================================================
+// FUNCOES AUXILIARES DOS TESTES
+// ============================================================
 
 void require(
     bool condition,
@@ -67,6 +74,376 @@ void requireFailure(
         testName + ": diagnostico de falha ausente."
         );
 }
+
+// ============================================================
+// INTERPRETADOR SEQUENCIAL EXCLUSIVO DOS TESTES
+// ============================================================
+
+std::string trim(const std::string &text)
+{
+    const auto first =
+        text.find_first_not_of(" \t\r\n");
+
+    if (first == std::string::npos)
+    {
+        return {};
+    }
+
+    const auto last =
+        text.find_last_not_of(" \t\r\n");
+
+    return text.substr(first, last - first + 1);
+}
+
+int word16(int value)
+{
+    const unsigned int bits =
+        static_cast<unsigned int>(value) & 0xFFFFu;
+
+    if (bits >= 0x8000u)
+    {
+        return static_cast<int>(bits) - 65536;
+    }
+
+    return static_cast<int>(bits);
+}
+
+std::vector<int> simulateAssembly(
+    const std::string &assembly,
+    const std::vector<int> &inputs
+    )
+{
+    std::unordered_map<std::string, std::size_t> addresses;
+
+    std::vector<int> memory;
+    std::vector<int> outputs;
+
+    std::size_t inputPosition = 0;
+
+    int acc = 0;
+    int indr = 0;
+
+    bool inData = false;
+    bool inText = false;
+    bool halted = false;
+
+    auto addressOf = [&](const std::string &name)
+        -> std::size_t
+    {
+        const auto found = addresses.find(name);
+
+        require(
+            found != addresses.end(),
+            "Rotulo desconhecido no Assembly: " + name
+            );
+
+        return found->second;
+    };
+
+    auto vectorAddress = [&](const std::string &name)
+        -> std::size_t
+    {
+        const long long address =
+            static_cast<long long>(addressOf(name)) +
+            indr;
+
+        require(
+            address >= 0 &&
+                address < static_cast<long long>(memory.size()),
+            "Endereco de vetor invalido: " + name
+            );
+
+        return static_cast<std::size_t>(address);
+    };
+
+    std::istringstream stream(assembly);
+    std::string line;
+
+    while (std::getline(stream, line))
+    {
+        line = trim(line);
+
+        if (line.empty())
+        {
+            continue;
+        }
+
+        if (line == ".data")
+        {
+            inData = true;
+            inText = false;
+            continue;
+        }
+
+        if (line == ".text")
+        {
+            inData = false;
+            inText = true;
+            continue;
+        }
+
+        if (inData)
+        {
+            const auto colon = line.find(':');
+
+            require(
+                colon != std::string::npos,
+                "Declaracao invalida: " + line
+                );
+
+            const std::string name =
+                trim(line.substr(0, colon));
+
+            require(
+                addresses.emplace(name, memory.size()).second,
+                "Rotulo de memoria duplicado: " + name
+                );
+
+            std::istringstream values(
+                line.substr(colon + 1)
+                );
+
+            std::string value;
+            std::size_t count = 0;
+
+            while (std::getline(values, value, ','))
+            {
+                memory.push_back(
+                    word16(std::stoi(trim(value)))
+                    );
+
+                ++count;
+            }
+
+            require(
+                count > 0,
+                "Declaracao sem valores: " + name
+                );
+
+            continue;
+        }
+
+        require(
+            inText,
+            "Instrucao fora da secao .text."
+            );
+
+        if (line.back() == ':')
+        {
+            continue;
+        }
+
+        std::istringstream instruction(line);
+
+        std::string opcode;
+        std::string operand;
+
+        instruction >> opcode >> operand;
+
+        require(
+            !operand.empty(),
+            "Instrucao sem operando: " + line
+            );
+
+        if (opcode == "HLT")
+        {
+            halted = true;
+            break;
+        }
+
+        if (opcode == "LDI")
+        {
+            acc = word16(std::stoi(operand));
+        }
+        else if (opcode == "LD")
+        {
+            if (operand == "$in_port")
+            {
+                require(
+                    inputPosition < inputs.size(),
+                    "Entrada de dados insuficiente."
+                    );
+
+                acc = word16(inputs[inputPosition++]);
+            }
+            else if (operand == "$indr")
+            {
+                acc = indr;
+            }
+            else
+            {
+                acc = memory.at(addressOf(operand));
+            }
+        }
+        else if (opcode == "STO")
+        {
+            if (operand == "$indr")
+            {
+                indr = acc;
+            }
+            else if (operand == "$out_port")
+            {
+                outputs.push_back(acc);
+            }
+            else
+            {
+                memory.at(addressOf(operand)) = acc;
+            }
+        }
+        else if (opcode == "LDV")
+        {
+            acc = memory.at(vectorAddress(operand));
+        }
+        else if (opcode == "STOV")
+        {
+            memory.at(vectorAddress(operand)) = acc;
+        }
+        else if (opcode == "ADD")
+        {
+            acc = word16(
+                acc + memory.at(addressOf(operand))
+                );
+        }
+        else if (opcode == "ADDI")
+        {
+            acc = word16(acc + std::stoi(operand));
+        }
+        else if (opcode == "SUB")
+        {
+            acc = word16(
+                acc - memory.at(addressOf(operand))
+                );
+        }
+        else if (opcode == "SUBI")
+        {
+            acc = word16(acc - std::stoi(operand));
+        }
+        else if (opcode == "AND")
+        {
+            acc = word16(
+                acc & memory.at(addressOf(operand))
+                );
+        }
+        else if (opcode == "ANDI")
+        {
+            acc = word16(acc & std::stoi(operand));
+        }
+        else if (opcode == "OR")
+        {
+            acc = word16(
+                acc | memory.at(addressOf(operand))
+                );
+        }
+        else if (opcode == "ORI")
+        {
+            acc = word16(acc | std::stoi(operand));
+        }
+        else if (opcode == "XOR")
+        {
+            acc = word16(
+                acc ^ memory.at(addressOf(operand))
+                );
+        }
+        else if (opcode == "XORI")
+        {
+            acc = word16(acc ^ std::stoi(operand));
+        }
+        else if (opcode == "NOT")
+        {
+            acc = word16(~acc);
+        }
+        else if (opcode == "SLL" || opcode == "SRL")
+        {
+            const int amount = std::stoi(operand);
+
+            require(
+                amount >= 0 && amount <= 15,
+                "Deslocamento invalido."
+                );
+
+            const unsigned int bits =
+                static_cast<unsigned int>(acc) & 0xFFFFu;
+
+            unsigned int shifted = 0;
+
+            if (opcode == "SLL")
+            {
+                shifted = bits << amount;
+            }
+            else
+            {
+                shifted = bits >> amount;
+            }
+
+            acc = word16(
+                static_cast<int>(shifted & 0xFFFFu)
+                );
+        }
+        else
+        {
+            throw std::runtime_error(
+                "Instrucao nao suportada pelo teste: " +
+                opcode
+                );
+        }
+    }
+
+    require(
+        halted,
+        "Programa nao finalizou com HLT."
+        );
+
+    require(
+        inputPosition == inputs.size(),
+        "Nem todas as entradas foram consumidas."
+        );
+
+    return outputs;
+}
+
+std::string formatValues(const std::vector<int> &values)
+{
+    std::ostringstream output;
+
+    for (std::size_t i = 0; i < values.size(); ++i)
+    {
+        if (i > 0)
+        {
+            output << ", ";
+        }
+
+        output << values[i];
+    }
+
+    return output.str();
+}
+
+void requireOutput(
+    const bip::CodegenResult &result,
+    const std::vector<int> &inputs,
+    const std::vector<int> &expected,
+    const std::string &testName
+    )
+{
+    requireSuccess(result, testName);
+
+    const auto actual =
+        simulateAssembly(result.assembly, inputs);
+
+    require(
+        actual == expected,
+        testName +
+            ": saida esperada [" +
+            formatValues(expected) +
+            "], obtida [" +
+            formatValues(actual) +
+            "]."
+        );
+}
+
+// ============================================================
+// TESTES ORIGINAIS
+// ============================================================
 
 void testBasicProgram()
 {
@@ -261,9 +638,7 @@ fim)";
         result.assembly,
         "a: 0\n"
         "b: 0\n"
-        "valores: 0\n"
-        "valores_1: 0\n"
-        "valores_2: 0\n",
+        "valores: 0, 0, 0\n",
         "Alocacao contigua de vetor"
         );
 
@@ -321,6 +696,13 @@ fim)";
         "Saida de vetor"
         );
 
+    requireOutput(
+        result,
+        {99},
+        {7, 99},
+        "Execucao de vetores e entrada/saida"
+        );
+
     std::cout << "[OK] Vetores e entrada/saida\n";
 }
 
@@ -372,6 +754,13 @@ fim)";
         "Saida de vetor unitario"
         );
 
+    requireOutput(
+        result,
+        {17},
+        {42, 17, 17},
+        "Execucao de entrada escalar e literais"
+        );
+
     std::cout << "[OK] Entrada escalar e literais\n";
 }
 
@@ -412,6 +801,13 @@ fim)";
         "Indice calculado em leitura"
         );
 
+    requireOutput(
+        result,
+        {},
+        {20},
+        "Execucao com indice calculado"
+        );
+
     std::cout << "[OK] Indices com expressoes\n";
 }
 
@@ -449,6 +845,13 @@ fim)";
         "    LD temp2\n"
         "    STOV valores\n",
         "Indice restaurado apos avaliar RHS"
+        );
+
+    requireOutput(
+        result,
+        {},
+        {10},
+        "Execucao de acessos aninhados"
         );
 
     std::cout << "[OK] Acessos aninhados\n";
@@ -512,6 +915,13 @@ fim)";
         result.assembly,
         "    SLL 1\n",
         "Deslocamento de elemento"
+        );
+
+    requireOutput(
+        result,
+        {},
+        {12},
+        "Execucao de aritmetica e bits com vetores"
         );
 
     std::cout << "[OK] Aritmetica e bits com vetores\n";
@@ -586,23 +996,9 @@ fim)";
 
     requireContains(
         result.assembly,
-        "v: 0\n"
-        "v_1: 0\n"
-        "v_2: 0\n"
-        "v_3: 0\n"
-        "v_4: 0\n"
-        "x: 0\n"
-        "x_1: 0\n"
-        "x_2: 0\n"
-        "x_3: 0\n"
-        "x_4: 0\n"
-        "x_5: 0\n"
-        "z: 0\n"
-        "z_1: 0\n"
-        "z_2: 0\n"
-        "z_3: 0\n"
-        "z_4: 0\n"
-        "z_5: 0\n",
+        "v: 0, 0, 0, 0, 0\n"
+        "x: 0, 0, 0, 0, 0, 0\n"
+        "z: 0, 0, 0, 0, 0, 0\n",
         "Reserva de memoria com nomes legiveis"
         );
 
@@ -655,6 +1051,13 @@ fim)";
         "Finalizacao do programa"
         );
 
+    requireOutput(
+        result,
+        {},
+        {13},
+        "Execucao com expressoes entre vetores"
+        );
+
     std::cout
         << "[OK] Nomes legiveis e expressao entre vetores\n";
 }
@@ -679,19 +1082,19 @@ fim)";
 
     requireSuccess(result, "Conflitos de nomes auxiliares");
 
-    // v_1 e uma variavel do usuario. O elemento
-    // v[1] precisa receber outro rotulo.
     requireContains(
         result.assembly,
-        "v: 0\n"
-        "__bip_vec_slot_0_1: 0\n"
-        "v_2: 0\n"
+        "v: 0, 0, 0\n"
         "v_1: 0\n",
-        "Colisao de nome de posicao de vetor"
+        "Vetor e variavel do usuario preservados"
         );
 
-    // temp1 tambem pertence ao usuario. Os
-    // temporarios gerados devem comecar em temp2.
+    require(
+        result.assembly.find("__bip_vec_slot_") ==
+            std::string::npos,
+        "Rotulo artificial de vetor nao deveria existir."
+        );
+
     requireContains(
         result.assembly,
         "temp1: 0\n"
@@ -716,6 +1119,13 @@ fim)";
         "    LD temp3\n"
         "    STOV v\n",
         "Atribuicao ao vetor sem conflito"
+        );
+
+    requireOutput(
+        result,
+        {},
+        {3},
+        "Execucao sem colisao de nomes"
         );
 
     std::cout << "[OK] Conflitos de nomes auxiliares\n";
@@ -816,12 +1226,390 @@ fim)";
     std::cout << "[OK] Indice literal invalido recusado\n";
 }
 
+// ============================================================
+// NOVOS TESTES DE REGRESSAO DA M2.2
+// ============================================================
+
+void testEvaluationRegression()
+{
+    const std::string source = R"(programa testeVetores
+inicio
+inteiro i, a, v[5], x[5];
+
+i recebe 1;
+v[0] recebe 10;
+v[i] recebe 20;
+v[i mais 1] recebe 30;
+x[3] recebe 7;
+
+a recebe v[i mais 1];
+mostre(a);
+
+v[i mais 1] recebe v[i] menos x[i mais 2];
+mostre(v[i mais 1]);
+
+leia(v[i mais 1]);
+mostre(v[i mais 1]);
+mostre(v[i]);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireSuccess(
+        result,
+        "Regressao da avaliacao M2.2"
+        );
+
+    requireContains(
+        result.assembly,
+        "v: 0, 0, 0, 0, 0\n"
+        "x: 0, 0, 0, 0, 0\n",
+        "Declaracao contigua"
+        );
+
+    requireOutput(
+        result,
+        {99},
+        {30, 13, 99, 20},
+        "Regressao da avaliacao M2.2"
+        );
+
+    std::cout << "[OK] Regressao da avaliacao M2.2\n";
+}
+
+void testNestedVectorInputOutput()
+{
+    const std::string source = R"(programa acessosAninhados
+inicio
+inteiro v[5], x[5];
+
+v[0] recebe 1;
+v[1] recebe 8;
+x[1] recebe 2;
+
+v[x[v[0]]] recebe v[v[0]] mais 3;
+mostre(v[2]);
+
+leia(v[x[v[0]]]);
+
+mostre(v[x[v[0]]]);
+mostre(v[1]);
+mostre(x[1]);
+mostre(v[0]);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireOutput(
+        result,
+        {77},
+        {11, 77, 8, 2, 1},
+        "Entrada e saida com acessos aninhados"
+        );
+
+    std::cout
+        << "[OK] Entrada e saida com acessos aninhados\n";
+}
+
+void testCompositeVectorIndices()
+{
+    const std::string source = R"(programa indicesCompostos
+inicio
+inteiro i, j, a, v[5];
+
+i recebe 3;
+j recebe 1;
+
+v[(i mais 1) menos (j mais 1)] recebe 42;
+v[i menos j menos 1] recebe 17;
+v[i menos (j menos 1)] recebe 31;
+
+a recebe 50 menos v[(i mais 1) menos (j mais 1)];
+
+mostre(v[2]);
+mostre(v[1]);
+mostre(v[3]);
+mostre(a);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireOutput(
+        result,
+        {},
+        {42, 17, 31, 8},
+        "Indices compostos e parenteses"
+        );
+
+    std::cout << "[OK] Indices compostos e parenteses\n";
+}
+
+void testNestedIndicesInsideBinaryExpression()
+{
+    const std::string source = R"(programa operandosAninhados
+inicio
+inteiro v[6], x[6], a;
+
+v[0] recebe 1;
+v[1] recebe 20;
+v[2] recebe 4;
+
+x[0] recebe 2;
+x[2] recebe 7;
+
+a recebe v[v[0]] menos (x[x[0]] menos v[2]);
+mostre(a);
+
+v[x[0] mais 1] recebe v[v[0]] menos x[x[0]];
+
+mostre(v[3]);
+mostre(v[1]);
+mostre(x[2]);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireOutput(
+        result,
+        {},
+        {17, 13, 20, 7},
+        "Operandos aninhados e temporarios simultaneos"
+        );
+
+    std::cout
+        << "[OK] Operandos aninhados e temporarios simultaneos\n";
+}
+
+void testBitwiseVectorIndices()
+{
+    const std::string source = R"(programa indicesBitwise
+inicio
+inteiro i, j, v[8];
+
+i recebe 6;
+j recebe 3;
+
+v[i eBitBit j] recebe 12;
+v[i ouExclusivoBitBit j] recebe 25;
+v[(j deslocaEsquerda 1) ouBitBit 1] recebe 37;
+v[(i deslocaDireita 1) menos 2] recebe 44;
+v[(naoBitBit 0) eBitBit 3] recebe 55;
+
+mostre(v[i eBitBit j]);
+mostre(v[i ouExclusivoBitBit j]);
+mostre(v[(j deslocaEsquerda 1) ouBitBit 1]);
+mostre(v[(i deslocaDireita 1) menos 2]);
+mostre(v[(naoBitBit 0) eBitBit 3]);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireOutput(
+        result,
+        {},
+        {12, 25, 37, 44, 55},
+        "Operacoes bit a bit nos indices"
+        );
+
+    std::cout << "[OK] Operacoes bit a bit nos indices\n";
+}
+
+void testTemporaryCollisionRuntime()
+{
+    const std::string source = R"(programa colisoes
+inicio
+inteiro i, temp1, temp2, v_1, v[3], x[3];
+
+i recebe 1;
+temp1 recebe 7;
+temp2 recebe 9;
+v_1 recebe 100;
+
+v[0] recebe 6;
+x[1] recebe 20;
+
+v[i] recebe x[i] menos v[0];
+
+mostre(v[1]);
+mostre(v_1);
+mostre(temp1);
+mostre(temp2);
+mostre(v[0]);
+mostre(x[1]);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireSuccess(
+        result,
+        "Colisoes de temporarios em execucao"
+        );
+
+    requireContains(
+        result.assembly,
+        "temp3: 0\n",
+        "Temporarios devem ignorar nomes do usuario"
+        );
+
+    requireOutput(
+        result,
+        {},
+        {14, 100, 7, 9, 6, 20},
+        "Preservacao das variaveis do usuario"
+        );
+
+    std::cout
+        << "[OK] Colisoes de temporarios em execucao\n";
+}
+
+void testVectorBoundaryIndices()
+{
+    const std::string source = R"(programa fronteiras
+inicio
+inteiro esquerda, v[3], direita;
+
+esquerda recebe 70;
+direita recebe 80;
+
+v[0] recebe 10;
+v[2] recebe 20;
+
+mostre(v[0]);
+mostre(v[2]);
+mostre(esquerda);
+mostre(direita);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireOutput(
+        result,
+        {},
+        {10, 20, 70, 80},
+        "Primeiro e ultimo indices do vetor"
+        );
+
+    std::cout << "[OK] Limites validos do vetor\n";
+}
+
+void testLiteralFormatsInIndices()
+{
+    const std::string source = R"(programa basesNumericas
+inicio
+inteiro v[5];
+
+v[0b10] recebe 12;
+v[0x3] recebe 13;
+
+mostre(v[2]);
+mostre(v[3]);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    requireOutput(
+        result,
+        {},
+        {12, 13},
+        "Literais binarios e hexadecimais nos indices"
+        );
+
+    std::cout
+        << "[OK] Bases numericas nos indices\n";
+}
+
+void testInvalidLiteralIndices()
+{
+    const std::vector<std::string> commands = {
+        "v[3] recebe 10;",
+        "v[menos 1] recebe 10;",
+        "v[(menos 1)] recebe 10;",
+        "leia(v[3]);",
+        "leia(v[menos 1]);",
+        "mostre(v[3]);",
+        "mostre(v[menos 1]);",
+        "a recebe v[3];",
+        "a recebe v[menos 1];"
+    };
+
+    const bip::BipCodeGenerator generator;
+
+    for (const auto &command : commands)
+    {
+        const std::string source =
+            "programa indiceInvalido\n"
+            "inicio\n"
+            "inteiro a, v[3];\n"
+            "v[0] recebe 1;\n" +
+            command +
+            "\nfim";
+
+        const auto result = generator.generate(source);
+
+        requireFailure(
+            result,
+            "Indice invalido: " + command
+            );
+
+        requireContains(
+            result.message,
+            "Indice literal fora dos limites",
+            "Diagnostico de indice invalido"
+            );
+    }
+
+    std::cout << "[OK] Indices literais invalidos\n";
+}
+
+void testUnsupportedOperationsInIndices()
+{
+    const std::vector<std::string> commands = {
+        "v[i vezes 2] recebe 10;",
+        "v[i divido 2] recebe 10;",
+        "v[i resto 2] recebe 10;",
+        "v[i deslocaEsquerda j] recebe 10;"
+    };
+
+    const bip::BipCodeGenerator generator;
+
+    for (const auto &command : commands)
+    {
+        const std::string source =
+            "programa indiceSemSuporte\n"
+            "inicio\n"
+            "inteiro i, j, v[5];\n"
+            "i recebe 1;\n"
+            "j recebe 1;\n" +
+            command +
+            "\nfim";
+
+        const auto result = generator.generate(source);
+
+        requireFailure(
+            result,
+            "Operacao de indice sem suporte: " + command
+            );
+    }
+
+    std::cout
+        << "[OK] Operacoes fora do escopo recusadas\n";
+}
+
 }
 
 int main()
 {
     try
     {
+        // Testes originais.
         testBasicProgram();
         testCompositeExpressions();
         testBitwiseOperators();
@@ -842,6 +1630,18 @@ int main()
         testUnsupportedLargeImmediate();
         testSemanticFailure();
         testOutOfBoundsLiteral();
+
+        // Novas regressoes da M2.2.
+        testEvaluationRegression();
+        testNestedVectorInputOutput();
+        testCompositeVectorIndices();
+        testNestedIndicesInsideBinaryExpression();
+        testBitwiseVectorIndices();
+        testTemporaryCollisionRuntime();
+        testVectorBoundaryIndices();
+        testLiteralFormatsInIndices();
+        testInvalidLiteralIndices();
+        testUnsupportedOperationsInIndices();
 
         std::cout
             << "Todos os testes do gerador BIP passaram.\n";
