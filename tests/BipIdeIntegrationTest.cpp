@@ -419,15 +419,68 @@ fim)";
         << "[OK] Tipo nao suportado recusado\n";
 }
 
-void testUnsupportedControlFlow()
+void testConditionalControlFlow()
 {
     const std::string source = R"(programa controle
 inicio
 inteiro a;
 
-se verdadeiro entao
 a recebe 1;
+
+se verdadeiro entao
+    a recebe 2;
 fimse
+
+se a igual 2 entao
+    mostre(a);
+senao
+    mostre(0);
+fimse
+
+fim)";
+
+    const CompilerService compiler;
+
+    const AnalysisResult result =
+        compiler.compile(source);
+
+    requireSuccess(
+        result,
+        "Desvio condicional"
+        );
+
+    requireContains(
+        result.assembly,
+        "BEQ",
+        "Comparacao por igualdade"
+        );
+
+    requireContains(
+        result.assembly,
+        "JMP",
+        "Desvio incondicional"
+        );
+
+    requireContains(
+        result.assembly,
+        "$out_port",
+        "Saida condicional"
+        );
+
+    std::cout
+        << "[OK] Controle condicional suportado\n";
+}
+
+void testUnsupportedLoop()
+{
+    const std::string source = R"(programa repeticao
+inicio
+inteiro a;
+a recebe 0;
+
+enquanto a menorQue 3 faca
+    a recebe a mais 1;
+fimenquanto
 
 fim)";
 
@@ -439,11 +492,11 @@ fim)";
     requireFailure(
         result,
         AnalysisPhase::CodeGeneration,
-        "Controle de fluxo nao suportado"
+        "Laco ainda nao implementado"
         );
 
     std::cout
-        << "[OK] Controle de fluxo sem suporte recusado\n";
+        << "[OK] Laco posterior ainda recusado\n";
 }
 
 void testWarningsNotDuplicated()
@@ -993,7 +1046,8 @@ int main()
 
         testUnsupportedOperation();
         testUnsupportedDataType();
-        testUnsupportedControlFlow();
+        testConditionalControlFlow();
+        testUnsupportedLoop();
 
         testWarningsNotDuplicated();
         testPreviousAssemblyNotReused();

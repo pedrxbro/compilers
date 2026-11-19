@@ -1,4 +1,5 @@
-﻿cmake_minimum_required(VERSION 3.16)
+﻿
+cmake_minimum_required(VERSION 3.16)
 
 project(compiler VERSION 0.1 LANGUAGES CXX)
 
@@ -320,6 +321,26 @@ if(BUILD_TESTING)
     add_test(
         NAME bip_ide_integration_test
         COMMAND bip_ide_integration_test
+    )
+
+    # ========================================================
+    # TESTES DE OPERACOES RELACIONAIS E CONDICIONAIS M3.1
+    # ========================================================
+
+    add_executable(bip_m31_test
+
+        tests/BipM31Test.cpp
+    )
+
+    target_link_libraries(bip_m31_test
+
+        PRIVATE
+            compiler_core
+    )
+
+    add_test(
+        NAME bip_m31_test
+        COMMAND bip_m31_test
     )
 
 endif()
