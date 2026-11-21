@@ -471,7 +471,7 @@ fim)";
         << "[OK] Controle condicional suportado\n";
 }
 
-void testUnsupportedLoop()
+void testLoopsSupported()
 {
     const std::string source = R"(programa repeticao
 inicio
@@ -479,9 +479,87 @@ inteiro a;
 a recebe 0;
 
 enquanto a menorQue 3 faca
+    mostre(a);
     a recebe a mais 1;
 fimenquanto
 
+faca
+    mostre(a);
+    a recebe a menos 1;
+ate a igual 0;
+
+fim)";
+
+    const CompilerService compiler;
+
+    const AnalysisResult analysis =
+        compiler.analyze(source);
+
+    require(
+        analysis.success && analysis.errors.empty(),
+        "Analise original dos lacos falhou."
+        );
+
+    require(
+        analysis.assembly.empty(),
+        "Analise nao deve gerar Assembly dos lacos."
+        );
+
+    const AnalysisResult result =
+        compiler.compile(source);
+
+    requireSuccess(
+        result,
+        "Integracao dos dois tipos de laco"
+        );
+
+    requireContains(
+        result.assembly,
+        "JMP",
+        "Saltos dos lacos"
+        );
+
+    requireContains(
+        result.assembly,
+        "BLT",
+        "Teste relacional do enquanto"
+        );
+
+    requireContains(
+        result.assembly,
+        "BEQ",
+        "Teste de encerramento do faca ate"
+        );
+
+    requireContains(
+        result.assembly,
+        "$out_port",
+        "Saida nos corpos dos lacos"
+        );
+
+    require(
+        result.symbolTable.size() == 1,
+        "Tabela de simbolos do programa com lacos incompleta."
+        );
+
+    std::cout
+        << "[OK] Enquanto e faca ate integrados\n";
+}
+
+void testLoopConditionCanAccessBodyScope()
+{
+    const std::string source = R"(programa escopoAte
+inicio
+inteiro contador;
+contador recebe 0;
+
+faca
+    inteiro limite;
+    limite recebe contador mais 1;
+    contador recebe contador mais 1;
+ate limite maiorIgualQue 2;
+
+mostre(contador);
 fim)";
 
     const CompilerService compiler;
@@ -489,14 +567,24 @@ fim)";
     const AnalysisResult result =
         compiler.compile(source);
 
-    requireFailure(
+    requireSuccess(
         result,
-        AnalysisPhase::CodeGeneration,
-        "Laco ainda nao implementado"
+        "Escopo do corpo na condicao ate"
+        );
+
+    require(
+        result.symbolTable.size() == 2,
+        "Declaracao local do laco nao encontrada."
+        );
+
+    requireContains(
+        result.assembly,
+        "__bip_local_",
+        "Armazenamento de identificador local"
         );
 
     std::cout
-        << "[OK] Laco posterior ainda recusado\n";
+        << "[OK] Condicao ate utiliza escopo do corpo\n";
 }
 
 void testWarningsNotDuplicated()
@@ -1047,7 +1135,8 @@ int main()
         testUnsupportedOperation();
         testUnsupportedDataType();
         testConditionalControlFlow();
-        testUnsupportedLoop();
+        testLoopsSupported();
+        testLoopConditionCanAccessBodyScope();
 
         testWarningsNotDuplicated();
         testPreviousAssemblyNotReused();

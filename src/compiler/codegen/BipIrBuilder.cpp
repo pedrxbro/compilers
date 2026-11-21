@@ -614,7 +614,9 @@ private:
     {
         while (!check(t_FIM) &&
                !check(t_FIMSE) &&
-               !check(t_SENAO))
+               !check(t_SENAO) &&
+               !check(t_FIMENQUANTO) &&
+               !check(t_ATE))
         {
             if (check(DOLLAR))
             {
@@ -642,6 +644,14 @@ private:
             else if (check(t_SE))
             {
                 parseConditional(statements);
+            }
+            else if (check(t_ENQUANTO))
+            {
+                parseWhile(statements);
+            }
+            else if (check(t_FACA))
+            {
+                parseRepeatUntil(statements);
             }
             else
             {
@@ -992,6 +1002,82 @@ private:
         consume(
             t_FIMSE,
             "Palavra 'fimse' esperada."
+            );
+
+        statements.push_back(
+            std::move(statement)
+            );
+    }
+
+    void parseWhile(
+        std::vector<Statement> &statements
+        )
+    {
+        consume(
+            t_ENQUANTO,
+            "Palavra 'enquanto' esperada."
+            );
+
+        Statement statement;
+        statement.kind = StatementKind::While;
+        statement.expression = parseExpression(1);
+
+        consume(
+            t_FACA,
+            "Palavra 'faca' esperada no laco enquanto."
+            );
+
+        // A acao semantica #46 entra no escopo
+        // identificado pelo lexema 'faca'.
+        enterScope("faca");
+
+        parseStatementList(statement.loopStatements);
+
+        // A acao #47 encerra o escopo antes de
+        // consumir FIMENQUANTO.
+        leaveScope();
+
+        consume(
+            t_FIMENQUANTO,
+            "Palavra 'fimenquanto' esperada."
+            );
+
+        statements.push_back(
+            std::move(statement)
+            );
+    }
+
+    void parseRepeatUntil(
+        std::vector<Statement> &statements
+        )
+    {
+        consume(
+            t_FACA,
+            "Palavra 'faca' esperada."
+            );
+
+        Statement statement;
+        statement.kind = StatementKind::RepeatUntil;
+
+        // A acao semantica #46 inicia o escopo.
+        enterScope("faca");
+
+        parseStatementList(statement.loopStatements);
+
+        consume(
+            t_ATE,
+            "Palavra 'ate' esperada no laco faca."
+            );
+
+        // A condicao pertence ao escopo do corpo:
+        // na gramatica, #45 ocorre antes de #47.
+        statement.expression = parseExpression(1);
+
+        leaveScope();
+
+        consume(
+            t_PONTO_VIRGULA,
+            "Ponto e virgula esperado apos o laco faca."
             );
 
         statements.push_back(

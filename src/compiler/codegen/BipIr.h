@@ -70,7 +70,9 @@ enum class StatementKind
     Assignment,
     Input,
     Output,
-    Conditional
+    Conditional,
+    While,
+    RepeatUntil
 };
 
 struct Statement
@@ -85,6 +87,9 @@ struct Statement
     std::vector<Statement> thenStatements;
     std::vector<Statement> elseStatements;
     bool hasElse = false;
+
+    // Corpo dos lacos pre-testados e pos-testados.
+    std::vector<Statement> loopStatements;
 };
 
 struct Program

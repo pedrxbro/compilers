@@ -865,6 +865,188 @@ fim)";
         );
 }
 
+void testInitialLoops()
+{
+    const std::string source = R"(programa testeLacos
+inicio
+inteiro i;
+
+i recebe 1;
+
+enquanto i menorIgualQue 3 faca
+    mostre(i);
+    i recebe i mais 1;
+fimenquanto
+
+i recebe 1;
+
+faca
+    mostre(i);
+    i recebe i mais 1;
+ate i maiorQue 3;
+
+fim)";
+
+    requireOutput(
+        source,
+        {},
+        {1, 2, 3, 1, 2, 3},
+        "Teste inicial de while e faca ate"
+        );
+}
+
+void testInitiallyFalseAndSingleIteration()
+{
+    const std::string source = R"(programa limitesLacos
+inicio
+inteiro i;
+
+i recebe 5;
+
+enquanto i menorQue 1 faca
+    mostre(99);
+fimenquanto
+
+enquanto falso faca
+    mostre(98);
+fimenquanto
+
+faca
+    mostre(i);
+    i recebe i mais 1;
+ate i maiorQue 0;
+
+fim)";
+
+    requireOutput(
+        source,
+        {},
+        {5},
+        "While com zero iteracoes e faca com uma"
+        );
+}
+
+void testVectorsAndInputInLoops()
+{
+    const std::string source = R"(programa vetoresLacos
+inicio
+inteiro i, v[4], x[4], total;
+
+i recebe 0;
+
+enquanto i menorQue 3 faca
+    leia(v[i]);
+    x[i] recebe v[i] mais i;
+    i recebe i mais 1;
+fimenquanto
+
+i recebe 0;
+
+faca
+    total recebe x[i] mais v[i];
+    mostre(total);
+    i recebe i mais 1;
+ate i maiorIgualQue 3;
+
+fim)";
+
+    requireOutput(
+        source,
+        {5, 7, 9},
+        {10, 15, 20},
+        "Vetores, leitura e temporarios nos lacos"
+        );
+}
+
+void testComposedConditionsAndNestedLoops()
+{
+    const std::string source = R"(programa aninhamentoLacos
+inicio
+inteiro i, j, resultado;
+
+i recebe 0;
+
+enquanto (i menorQue 2) e (verdadeiro ou falso) faca
+    j recebe 0;
+
+    faca
+        resultado recebe i mais j;
+
+        se (resultado igual 1) ou falso entao
+            mostre(7);
+        senao
+            mostre(resultado);
+        fimse
+
+        j recebe j mais 1;
+    ate j maiorIgualQue 2;
+
+    i recebe i mais 1;
+fimenquanto
+
+fim)";
+
+    requireOutput(
+        source,
+        {},
+        {0, 7, 7, 2},
+        "Condicoes compostas e lacos aninhados"
+        );
+}
+
+void testLoopScopesAndLabelCollisions()
+{
+    const std::string source = R"(programa escoposLacos
+inicio
+inteiro i, temp1, __bip_label_1;
+
+i recebe 0;
+temp1 recebe 50;
+__bip_label_1 recebe 8;
+
+enquanto i menorQue 2 faca
+    inteiro temp1;
+    temp1 recebe i mais 10;
+    mostre(temp1);
+    i recebe i mais 1;
+fimenquanto
+
+mostre(temp1);
+
+faca
+    inteiro limite;
+    limite recebe i mais 2;
+    mostre(limite);
+    i recebe i mais 1;
+ate limite maiorIgualQue 5;
+
+mostre(__bip_label_1);
+fim)";
+
+    const bip::BipCodeGenerator generator;
+
+    const auto first = generator.generate(source);
+    const auto second = generator.generate(source);
+
+    require(
+        first.success && second.success,
+        "Geracao dos lacos com escopos falhou."
+        );
+
+    require(
+        first.assembly == second.assembly,
+        "Rotulos dos lacos nao sao deterministicos."
+        );
+
+    AssemblyMachine machine(first.assembly);
+
+    require(
+        machine.execute() ==
+            std::vector<int>{10, 11, 50, 4, 5, 8},
+        "Escopos, condicao ate ou rotulos incorretos."
+        );
+}
+
 }
 
 int main()
@@ -880,6 +1062,12 @@ int main()
         testBitwiseAndLogicalSeparation();
         testOutOfScopeRejected();
         testDeterministicGeneration();
+
+        testInitialLoops();
+        testInitiallyFalseAndSingleIteration();
+        testVectorsAndInputInLoops();
+        testComposedConditionsAndNestedLoops();
+        testLoopScopesAndLabelCollisions();
 
         std::cout
             << "Todos os testes M3.1 passaram.\n";
