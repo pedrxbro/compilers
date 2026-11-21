@@ -344,14 +344,18 @@ private:
         instructions_.push_back(name + ":");
     }
 
-    // O estado e exclusivo desta compilacao.
-    // Nunca utiliza um rotulo global fixo de controle.
+    // Cada compilacao possui seu proprio contador.
+    // Os rotulos seguem o padrao R1, R2, R3, ...
+    // utilizado nos exemplos de Assembly do professor.
+    //
+    // A verificacao em occupiedNames_ evita conflitos
+    // com identificadores declarados pelo usuario.
     std::string newLabel()
     {
         for (;;)
         {
             const std::string candidate =
-                "__bip_label_" +
+                "R" +
                 std::to_string(nextLabelId_++);
 
             if (occupiedNames_.insert(
