@@ -28,24 +28,23 @@ struct Temporary
     bool inUse = false;
 };
 
+
 std::string normalizedName(const std::string &name)
 {
     std::string result = name;
 
-    std::transform(
-        result.begin(),
-        result.end(),
-        result.begin(),
-        [](unsigned char character)
-        {
-            return static_cast<char>(
-                std::toupper(character)
-                );
-        }
-        );
+    for (char &character : result)
+    {
+        character = static_cast<char>(
+            std::toupper(
+                static_cast<unsigned char>(character)
+                )
+            );
+    }
 
     return result;
 }
+
 
 bool fitsImmediate(int value)
 {
@@ -856,7 +855,7 @@ private:
         if (!expression)
         {
             throw CodegenError(
-                "Condicao nula no comando se."
+                "Condicao nula no comando de controle."
                 );
         }
 
@@ -1087,6 +1086,78 @@ private:
         }
     }
 
+    void emitWhile(const Statement &statement)
+    {
+        if (!statement.expression)
+        {
+            throw CodegenError(
+                "Laco enquanto sem condicao."
+                );
+        }
+
+        const std::string conditionLabel =
+            newLabel();
+
+        const std::string bodyLabel =
+            newLabel();
+
+        const std::string endLabel =
+            newLabel();
+
+        // Testa antes da primeira iteracao e novamente
+        // sempre que o corpo terminar.
+        label(conditionLabel);
+
+        emitCondition(
+            statement.expression,
+            bodyLabel,
+            endLabel
+            );
+
+        label(bodyLabel);
+
+        emitStatementList(
+            statement.loopStatements
+            );
+
+        instruction("JMP", conditionLabel);
+
+        label(endLabel);
+    }
+
+    void emitRepeatUntil(const Statement &statement)
+    {
+        if (!statement.expression)
+        {
+            throw CodegenError(
+                "Laco faca ate sem condicao."
+                );
+        }
+
+        const std::string startLabel =
+            newLabel();
+
+        const std::string endLabel =
+            newLabel();
+
+        // O corpo sempre executa antes do primeiro teste.
+        label(startLabel);
+
+        emitStatementList(
+            statement.loopStatements
+            );
+
+        // ATE e condicao de encerramento:
+        // verdadeiro encerra, falso repete.
+        emitCondition(
+            statement.expression,
+            endLabel,
+            startLabel
+            );
+
+        label(endLabel);
+    }
+
     void emitStatement(const Statement &statement)
     {
         switch (statement.kind)
@@ -1105,6 +1176,14 @@ private:
 
         case StatementKind::Conditional:
             emitConditional(statement);
+            return;
+
+        case StatementKind::While:
+            emitWhile(statement);
+            return;
+
+        case StatementKind::RepeatUntil:
+            emitRepeatUntil(statement);
             return;
         }
 
