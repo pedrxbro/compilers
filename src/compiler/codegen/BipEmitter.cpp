@@ -1,10 +1,11 @@
-
 #include "BipIr.h"
 
+#include <cctype>
 #include <cstddef>
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -26,6 +27,22 @@ struct Temporary
     bool inUse = false;
 };
 
+std::string normalizedName(const std::string &name)
+{
+    std::string result = name;
+
+    for (char &character : result)
+    {
+        character = static_cast<char>(
+            std::toupper(
+                static_cast<unsigned char>(character)
+                )
+            );
+    }
+
+    return result;
+}
+
 bool fitsImmediate(int value)
 {
     return value >= MIN_IMMEDIATE &&
@@ -40,9 +57,55 @@ bool fitsWord(int value)
 
 bool reservedName(const std::string &name)
 {
-    return name == "_PRINCIPAL" ||
+    return normalizedName(name) == "_PRINCIPAL" ||
            name.rfind("__bip_tmp_", 0) == 0 ||
            name.rfind("__bip_vec_slot_", 0) == 0;
+}
+
+bool isRelational(Operation operation)
+{
+    switch (operation)
+    {
+    case Operation::Equal:
+    case Operation::NotEqual:
+    case Operation::Greater:
+    case Operation::Less:
+    case Operation::GreaterEqual:
+    case Operation::LessEqual:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+const char *comparisonOpcode(Operation operation)
+{
+    switch (operation)
+    {
+    case Operation::Equal:
+        return "BEQ";
+
+    case Operation::NotEqual:
+        return "BNE";
+
+    case Operation::Greater:
+        return "BGT";
+
+    case Operation::Less:
+        return "BLT";
+
+    case Operation::GreaterEqual:
+        return "BGE";
+
+    case Operation::LessEqual:
+        return "BLE";
+
+    default:
+        throw CodegenError(
+            "Operador relacional desconhecido."
+            );
+    }
 }
 
 class EmitterState
@@ -51,6 +114,22 @@ public:
     explicit EmitterState(const Program &program)
         : program_(program)
     {
+        // Os nomes de origem tambem ficam reservados,
+        // inclusive quando sao substituidos por nomes
+        // exclusivos de memoria para escopos internos.
+        for (const std::string &name :
+             program_.reservedNames)
+        {
+            occupiedNames_.insert(
+                normalizedName(name)
+                );
+        }
+
+        occupiedNames_.insert("_PRINCIPAL");
+
+        std::unordered_set<std::string>
+            declarationLabels;
+
         for (const Declaration &declaration :
              program_.declarations)
         {
@@ -69,6 +148,16 @@ public:
             {
                 throw CodegenError(
                     "Declaracao de memoria BIP invalida: " +
+                    declaration.name
+                    );
+            }
+
+            if (!declarationLabels.insert(
+                                      normalizedName(declaration.name)
+                                      ).second)
+            {
+                throw CodegenError(
+                    "Rotulo de memoria duplicado no IR: " +
                     declaration.name
                     );
             }
@@ -94,29 +183,16 @@ public:
             }
 
             dataCells_ += declaration.size;
+
+            occupiedNames_.insert(
+                normalizedName(declaration.name)
+                );
         }
     }
 
     std::string generate()
     {
-        for (const Statement &statement :
-             program_.statements)
-        {
-            switch (statement.kind)
-            {
-            case StatementKind::Assignment:
-                emitAssignment(statement);
-                break;
-
-            case StatementKind::Input:
-                emitInput(statement);
-                break;
-
-            case StatementKind::Output:
-                emitOutput(statement);
-                break;
-            }
-        }
+        emitStatementList(program_.statements);
 
         instruction("HLT", "0");
 
@@ -144,10 +220,7 @@ public:
 
         output << ".data\n";
 
-        // Declara variaveis escalares e vetores.
-        // Vetores sao representados por uma unica
-        // declaracao com os elementos separados
-        // por virgulas, conforme o formato BIP.
+        // Mantem o formato contiguo de vetores da M2.2.
         for (const Declaration &declaration :
              program_.declarations)
         {
@@ -155,9 +228,9 @@ public:
 
             if (declaration.isVector)
             {
-                for (std::size_t j = 1;
-                     j < declaration.size;
-                     ++j)
+                for (std::size_t index = 1;
+                     index < declaration.size;
+                     ++index)
                 {
                     output << ", 0";
                 }
@@ -176,7 +249,14 @@ public:
 
         for (const std::string &line : instructions_)
         {
-            output << "    " << line << '\n';
+            if (!line.empty() && line.back() == ':')
+            {
+                output << line << '\n';
+            }
+            else
+            {
+                output << "    " << line << '\n';
+            }
         }
 
         return output.str();
@@ -187,7 +267,8 @@ private:
         const std::string &name
         ) const
     {
-        const auto found = declarations_.find(name);
+        const auto found =
+            declarations_.find(name);
 
         if (found == declarations_.end())
         {
@@ -251,6 +332,41 @@ private:
             );
     }
 
+    void label(const std::string &name)
+    {
+        if (name.empty())
+        {
+            throw CodegenError(
+                "Rotulo de desvio vazio."
+                );
+        }
+
+        instructions_.push_back(name + ":");
+    }
+
+    // Cada compilacao possui seu proprio contador.
+    // Os rotulos seguem o padrao R1, R2, R3, ...
+    // utilizado nos exemplos de Assembly do professor.
+    //
+    // A verificacao em occupiedNames_ evita conflitos
+    // com identificadores declarados pelo usuario.
+    std::string newLabel()
+    {
+        for (;;)
+        {
+            const std::string candidate =
+                "R" +
+                std::to_string(nextLabelId_++);
+
+            if (occupiedNames_.insert(
+                                  normalizedName(candidate)
+                                  ).second)
+            {
+                return candidate;
+            }
+        }
+    }
+
     void loadLiteral(int value)
     {
         if (!fitsWord(value))
@@ -283,16 +399,20 @@ private:
             }
         }
 
-        // A numeracao comeca em 1 e nao reutiliza
-        // nomes que ja pertencem ao codigo fonte.
         std::string name;
 
-        do
+        for (;;)
         {
             name = "temp" +
                    std::to_string(nextTemporaryId_++);
+
+            if (occupiedNames_.insert(
+                                  normalizedName(name)
+                                  ).second)
+            {
+                break;
+            }
         }
-        while (declarations_.count(name) != 0);
 
         temporaries_.push_back(
             {name, true}
@@ -413,6 +533,7 @@ private:
                     loadLiteral(
                         static_cast<int>(value)
                         );
+
                     return;
                 }
             }
@@ -492,7 +613,8 @@ private:
             return;
         }
 
-        const Expression &right = *expression.right;
+        const Expression &right =
+            *expression.right;
 
         if (right.operation == Operation::Literal &&
             fitsImmediate(right.value))
@@ -521,8 +643,6 @@ private:
             return;
         }
 
-        // Preserva o primeiro operando enquanto
-        // o segundo e avaliado.
         const std::string leftTemporary =
             acquireTemporary();
 
@@ -597,10 +717,241 @@ private:
         case Operation::BitwiseXor:
             emitBinary(*expression);
             return;
+
+        default:
+            throw CodegenError(
+                "Expressao logica ou relacional "
+                "utilizada em contexto inteiro nao suportado."
+                );
+        }
+    }
+
+    // Avalia a comparacao como um desvio para dois
+    // destinos explicitos. A ordem de avaliacao dos
+    // operandos e preservada.
+    void emitComparison(
+        const Expression &expression,
+        const std::string &trueLabel,
+        const std::string &falseLabel
+        )
+    {
+        if (!expression.left || !expression.right)
+        {
+            throw CodegenError(
+                "Comparacao sem operandos."
+                );
+        }
+
+        const std::string leftTemporary =
+            acquireTemporary();
+
+        emitExpression(expression.left);
+        instruction("STO", leftTemporary);
+
+        const std::string rightTemporary =
+            acquireTemporary();
+
+        emitExpression(expression.right);
+        instruction("STO", rightTemporary);
+
+        const Operation operation = expression.operation;
+
+        if (operation == Operation::Equal ||
+            operation == Operation::NotEqual)
+        {
+            // Igualdade e desigualdade dependem apenas
+            // de zero. O wrap da subtracao de 16 bits
+            // nao altera a igualdade de operandos.
+            instruction("LD", leftTemporary);
+            instruction("SUB", rightTemporary);
+
+            instruction(
+                comparisonOpcode(operation),
+                trueLabel
+                );
+
+            instruction("JMP", falseLabel);
+        }
+        else
+        {
+            // Para ordenacao, a subtracao de inteiros
+            // de sinais opostos pode produzir overflow.
+            //
+            // Com sinais opostos, a comparacao e
+            // decidida diretamente pelos sinais.
+            // Somente com sinais iguais fazemos SUB.
+            const std::string leftNegative =
+                newLabel();
+
+            const std::string positiveNegative =
+                newLabel();
+
+            const std::string negativePositive =
+                newLabel();
+
+            const std::string sameSign =
+                newLabel();
+
+            instruction("LD", leftTemporary);
+            instruction("BLT", leftNegative);
+
+            instruction("LD", rightTemporary);
+            instruction("BLT", positiveNegative);
+            instruction("JMP", sameSign);
+
+            label(leftNegative);
+
+            instruction("LD", rightTemporary);
+            instruction("BGE", negativePositive);
+            instruction("JMP", sameSign);
+
+            label(positiveNegative);
+
+            const bool positiveIsGreater =
+                operation == Operation::Greater ||
+                operation == Operation::GreaterEqual;
+
+            instruction(
+                "JMP",
+                positiveIsGreater
+                    ? trueLabel
+                    : falseLabel
+                );
+
+            label(negativePositive);
+
+            instruction(
+                "JMP",
+                positiveIsGreater
+                    ? falseLabel
+                    : trueLabel
+                );
+
+            label(sameSign);
+
+            instruction("LD", leftTemporary);
+            instruction("SUB", rightTemporary);
+
+            instruction(
+                comparisonOpcode(operation),
+                trueLabel
+                );
+
+            instruction("JMP", falseLabel);
+        }
+
+        releaseTemporary(rightTemporary);
+        releaseTemporary(leftTemporary);
+    }
+
+    // Compila expressoes logicas com curto-circuito.
+    // Nao usa AND/OR bit a bit para representar
+    // operadores logicos da linguagem.
+    void emitCondition(
+        const ExpressionPtr &expression,
+        const std::string &trueLabel,
+        const std::string &falseLabel
+        )
+    {
+        if (!expression)
+        {
+            throw CodegenError(
+                "Condicao nula no comando de controle."
+                );
+        }
+
+        switch (expression->operation)
+        {
+        case Operation::BooleanLiteral:
+            instruction(
+                "JMP",
+                expression->value != 0
+                    ? trueLabel
+                    : falseLabel
+                );
+            return;
+
+        case Operation::LogicalNot:
+            emitCondition(
+                expression->left,
+                falseLabel,
+                trueLabel
+                );
+            return;
+
+        case Operation::LogicalAnd:
+        {
+            if (!expression->left || !expression->right)
+            {
+                throw CodegenError(
+                    "Operacao logica 'e' incompleta."
+                    );
+            }
+
+            const std::string evaluateRight =
+                newLabel();
+
+            emitCondition(
+                expression->left,
+                evaluateRight,
+                falseLabel
+                );
+
+            label(evaluateRight);
+
+            emitCondition(
+                expression->right,
+                trueLabel,
+                falseLabel
+                );
+            return;
+        }
+
+        case Operation::LogicalOr:
+        {
+            if (!expression->left || !expression->right)
+            {
+                throw CodegenError(
+                    "Operacao logica 'ou' incompleta."
+                    );
+            }
+
+            const std::string evaluateRight =
+                newLabel();
+
+            emitCondition(
+                expression->left,
+                trueLabel,
+                evaluateRight
+                );
+
+            label(evaluateRight);
+
+            emitCondition(
+                expression->right,
+                trueLabel,
+                falseLabel
+                );
+            return;
+        }
+
+        default:
+            break;
+        }
+
+        if (isRelational(expression->operation))
+        {
+            emitComparison(
+                *expression,
+                trueLabel,
+                falseLabel
+                );
+            return;
         }
 
         throw CodegenError(
-            "Expressao desconhecida no gerador BIP."
+            "Condicao BIP exige expressao relacional "
+            "ou expressao logica valida."
             );
     }
 
@@ -629,17 +980,14 @@ private:
 
         requireVector(statement.destination);
 
-        // O indice permanece reservado durante
-        // toda a avaliacao do lado direito.
         const std::string indexTemporary =
             acquireTemporary();
 
         emitExpression(statement.destinationIndex);
-
         instruction("STO", indexTemporary);
 
-        // A expressao pode acessar outros vetores
-        // e modificar o registrador $indr.
+        // A expressao direita pode acessar vetores e
+        // alterar o registrador especial $indr.
         emitExpression(statement.expression);
 
         const std::string valueTemporary =
@@ -647,11 +995,9 @@ private:
 
         instruction("STO", valueTemporary);
 
-        // Restaura o indice antes de armazenar.
         instruction("LD", indexTemporary);
         instruction("STO", "$indr");
 
-        // STOV recebe o valor do ACC.
         instruction("LD", valueTemporary);
         instruction("STOV", statement.destination);
 
@@ -666,11 +1012,7 @@ private:
             requireScalar(statement.destination);
 
             instruction("LD", "$in_port");
-            instruction(
-                "STO",
-                statement.destination
-                );
-
+            instruction("STO", statement.destination);
             return;
         }
 
@@ -697,12 +1039,258 @@ private:
         instruction("STO", "$out_port");
     }
 
+    void emitConditional(const Statement &statement)
+    {
+        if (!statement.expression)
+        {
+            throw CodegenError(
+                "Comando se sem expressao condicional."
+                );
+        }
+
+        const std::string thenLabel =
+            newLabel();
+
+        const std::string falseLabel =
+            newLabel();
+
+        emitCondition(
+            statement.expression,
+            thenLabel,
+            falseLabel
+            );
+
+        label(thenLabel);
+
+        emitStatementList(
+            statement.thenStatements
+            );
+
+        if (statement.hasElse)
+        {
+            const std::string endLabel =
+                newLabel();
+
+            instruction("JMP", endLabel);
+
+            label(falseLabel);
+
+            emitStatementList(
+                statement.elseStatements
+                );
+
+            label(endLabel);
+        }
+        else
+        {
+            label(falseLabel);
+        }
+    }
+
+    void emitWhile(const Statement &statement)
+    {
+        if (!statement.expression)
+        {
+            throw CodegenError(
+                "Laco enquanto sem condicao."
+                );
+        }
+
+        const std::string conditionLabel =
+            newLabel();
+
+        const std::string bodyLabel =
+            newLabel();
+
+        const std::string endLabel =
+            newLabel();
+
+        // Testa antes da primeira iteracao e novamente
+        // sempre que o corpo terminar.
+        label(conditionLabel);
+
+        emitCondition(
+            statement.expression,
+            bodyLabel,
+            endLabel
+            );
+
+        label(bodyLabel);
+
+        emitStatementList(
+            statement.loopStatements
+            );
+
+        instruction("JMP", conditionLabel);
+
+        label(endLabel);
+    }
+
+    void emitRepeatUntil(const Statement &statement)
+    {
+        if (!statement.expression)
+        {
+            throw CodegenError(
+                "Laco faca ate sem condicao."
+                );
+        }
+
+        const std::string startLabel =
+            newLabel();
+
+        const std::string endLabel =
+            newLabel();
+
+        // O corpo sempre executa antes do primeiro teste.
+        label(startLabel);
+
+        emitStatementList(
+            statement.loopStatements
+            );
+
+        // ATE e condicao de encerramento:
+        // verdadeiro encerra, falso repete.
+        emitCondition(
+            statement.expression,
+            endLabel,
+            startLabel
+            );
+
+        label(endLabel);
+    }
+
+    void emitFor(const Statement &statement)
+    {
+        if (!statement.expression)
+        {
+            throw CodegenError(
+                "Laco para sem condicao."
+                );
+        }
+
+        if (statement.initializationStatements.size() != 1 ||
+            statement.postStatements.size() != 1)
+        {
+            throw CodegenError(
+                "Laco para exige inicializacao "
+                "e pos-operacao."
+                );
+        }
+
+        if (statement.initializationStatements.front().kind !=
+                StatementKind::Assignment ||
+            statement.postStatements.front().kind !=
+                StatementKind::Assignment)
+        {
+            throw CodegenError(
+                "Operacao invalida no cabecalho do laco para."
+                );
+        }
+
+        // 1. Inicializacao, executada uma unica vez.
+        emitStatementList(
+            statement.initializationStatements
+            );
+
+        const std::string conditionLabel =
+            newLabel();
+
+        const std::string bodyLabel =
+            newLabel();
+
+        const std::string endLabel =
+            newLabel();
+
+        // 2. Inicio e 3. avaliacao da condicao.
+        label(conditionLabel);
+
+        // 4. Condicao falsa desvia diretamente ao fim.
+        emitCondition(
+            statement.expression,
+            bodyLabel,
+            endLabel
+            );
+
+        // 5. Corpo do laco.
+        label(bodyLabel);
+
+        emitStatementList(
+            statement.loopStatements
+            );
+
+        // 6. Pos-operacao, depois de todo o corpo.
+        emitStatementList(
+            statement.postStatements
+            );
+
+        // 7. Nova avaliacao da condicao.
+        instruction("JMP", conditionLabel);
+
+        // 8. Encerramento.
+        label(endLabel);
+    }
+
+    void emitStatement(const Statement &statement)
+    {
+        switch (statement.kind)
+        {
+        case StatementKind::Assignment:
+            emitAssignment(statement);
+            return;
+
+        case StatementKind::Input:
+            emitInput(statement);
+            return;
+
+        case StatementKind::Output:
+            emitOutput(statement);
+            return;
+
+        case StatementKind::Conditional:
+            emitConditional(statement);
+            return;
+
+        case StatementKind::While:
+            emitWhile(statement);
+            return;
+
+        case StatementKind::RepeatUntil:
+            emitRepeatUntil(statement);
+            return;
+
+        case StatementKind::For:
+            emitFor(statement);
+            return;
+        }
+
+        throw CodegenError(
+            "Comando desconhecido no gerador BIP."
+            );
+    }
+
+    void emitStatementList(
+        const std::vector<Statement> &statements
+        )
+    {
+        for (const Statement &statement : statements)
+        {
+            emitStatement(statement);
+        }
+    }
+
     const Program &program_;
 
-    std::unordered_map<std::string, Declaration> declarations_;
+    std::unordered_map<
+        std::string,
+        Declaration
+        > declarations_;
+
+    std::unordered_set<std::string>
+        occupiedNames_;
 
     std::size_t dataCells_ = 0;
     std::size_t nextTemporaryId_ = 1;
+    std::size_t nextLabelId_ = 1;
 
     std::vector<Temporary> temporaries_;
     std::vector<std::string> instructions_;

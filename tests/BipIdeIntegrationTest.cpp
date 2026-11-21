@@ -4,6 +4,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -51,23 +52,9 @@ void requireSuccess(
         testName + ": Assembly vazio."
         );
 
-    requireContains(
-        result.assembly,
-        ".data",
-        testName
-        );
-
-    requireContains(
-        result.assembly,
-        ".text",
-        testName
-        );
-
-    requireContains(
-        result.assembly,
-        "HLT 0",
-        testName
-        );
+    requireContains(result.assembly, ".data", testName);
+    requireContains(result.assembly, ".text", testName);
+    requireContains(result.assembly, "HLT 0", testName);
 }
 
 void requireFailure(
@@ -102,6 +89,10 @@ void requireFailure(
         );
 }
 
+// ============================================================
+// PROGRAMAS DE TESTE
+// ============================================================
+
 const std::string basicSource = R"(programa calculo
 inicio
 inteiro a, b, resultado;
@@ -117,6 +108,31 @@ inicio
 inteiro a;
 a recebe b mais 1;
 fim)";
+
+const std::string vectorRegressionSource = R"(programa testeVetores
+inicio
+inteiro i, a, v[5], x[5];
+
+i recebe 1;
+v[0] recebe 10;
+v[i] recebe 20;
+v[i mais 1] recebe 30;
+x[3] recebe 7;
+
+a recebe v[i mais 1];
+mostre(a);
+
+v[i mais 1] recebe v[i] menos x[i mais 2];
+mostre(v[i mais 1]);
+
+leia(v[i mais 1]);
+mostre(v[i mais 1]);
+mostre(v[i]);
+fim)";
+
+// ============================================================
+// TESTES ORIGINAIS
+// ============================================================
 
 void testOriginalAnalysisPreserved()
 {
@@ -230,8 +246,8 @@ fim)";
 
     requireContains(
         result.assembly,
-        "valores: 0",
-        "Declaracao do vetor"
+        "valores: 0, 0, 0\n",
+        "Declaracao contigua do vetor"
         );
 
     requireContains(
@@ -403,14 +419,22 @@ fim)";
         << "[OK] Tipo nao suportado recusado\n";
 }
 
-void testUnsupportedControlFlow()
+void testConditionalControlFlow()
 {
     const std::string source = R"(programa controle
 inicio
 inteiro a;
 
-se verdadeiro entao
 a recebe 1;
+
+se verdadeiro entao
+    a recebe 2;
+fimse
+
+se a igual 2 entao
+    mostre(a);
+senao
+    mostre(0);
 fimse
 
 fim)";
@@ -420,14 +444,147 @@ fim)";
     const AnalysisResult result =
         compiler.compile(source);
 
-    requireFailure(
+    requireSuccess(
         result,
-        AnalysisPhase::CodeGeneration,
-        "Controle de fluxo nao suportado"
+        "Desvio condicional"
+        );
+
+    requireContains(
+        result.assembly,
+        "BEQ",
+        "Comparacao por igualdade"
+        );
+
+    requireContains(
+        result.assembly,
+        "JMP",
+        "Desvio incondicional"
+        );
+
+    requireContains(
+        result.assembly,
+        "$out_port",
+        "Saida condicional"
         );
 
     std::cout
-        << "[OK] Controle de fluxo sem suporte recusado\n";
+        << "[OK] Controle condicional suportado\n";
+}
+
+void testLoopsSupported()
+{
+    const std::string source = R"(programa repeticao
+inicio
+inteiro a;
+a recebe 0;
+
+enquanto a menorQue 3 faca
+    mostre(a);
+    a recebe a mais 1;
+fimenquanto
+
+faca
+    mostre(a);
+    a recebe a menos 1;
+ate a igual 0;
+
+fim)";
+
+    const CompilerService compiler;
+
+    const AnalysisResult analysis =
+        compiler.analyze(source);
+
+    require(
+        analysis.success && analysis.errors.empty(),
+        "Analise original dos lacos falhou."
+        );
+
+    require(
+        analysis.assembly.empty(),
+        "Analise nao deve gerar Assembly dos lacos."
+        );
+
+    const AnalysisResult result =
+        compiler.compile(source);
+
+    requireSuccess(
+        result,
+        "Integracao dos dois tipos de laco"
+        );
+
+    requireContains(
+        result.assembly,
+        "JMP",
+        "Saltos dos lacos"
+        );
+
+    requireContains(
+        result.assembly,
+        "BLT",
+        "Teste relacional do enquanto"
+        );
+
+    requireContains(
+        result.assembly,
+        "BEQ",
+        "Teste de encerramento do faca ate"
+        );
+
+    requireContains(
+        result.assembly,
+        "$out_port",
+        "Saida nos corpos dos lacos"
+        );
+
+    require(
+        result.symbolTable.size() == 1,
+        "Tabela de simbolos do programa com lacos incompleta."
+        );
+
+    std::cout
+        << "[OK] Enquanto e faca ate integrados\n";
+}
+
+void testLoopConditionCanAccessBodyScope()
+{
+    const std::string source = R"(programa escopoAte
+inicio
+inteiro contador;
+contador recebe 0;
+
+faca
+    inteiro limite;
+    limite recebe contador mais 1;
+    contador recebe contador mais 1;
+ate limite maiorIgualQue 2;
+
+mostre(contador);
+fim)";
+
+    const CompilerService compiler;
+
+    const AnalysisResult result =
+        compiler.compile(source);
+
+    requireSuccess(
+        result,
+        "Escopo do corpo na condicao ate"
+        );
+
+    require(
+        result.symbolTable.size() == 2,
+        "Declaracao local do laco nao encontrada."
+        );
+
+    requireContains(
+        result.assembly,
+        "__bip_local_",
+        "Armazenamento de identificador local"
+        );
+
+    std::cout
+        << "[OK] Condicao ate utiliza escopo do corpo\n";
 }
 
 void testWarningsNotDuplicated()
@@ -530,12 +687,443 @@ void testGeneratorOriginalApi()
         << "[OK] API original do gerador preservada\n";
 }
 
+// ============================================================
+// NOVOS TESTES DE INTEGRACAO DA M2.2
+// ============================================================
+
+void testVectorIndexRegression()
+{
+    const CompilerService compiler;
+
+    const AnalysisResult analysis =
+        compiler.analyze(vectorRegressionSource);
+
+    require(
+        analysis.success,
+        "Analise com indices calculados falhou: " +
+            analysis.message
+        );
+
+    require(
+        analysis.errors.empty(),
+        "Analise de vetores retornou erros."
+        );
+
+    require(
+        analysis.assembly.empty(),
+        "Analise semantica nao deve gerar Assembly."
+        );
+
+    const AnalysisResult result =
+        compiler.compile(vectorRegressionSource);
+
+    requireSuccess(
+        result,
+        "Regressao de indices calculados"
+        );
+
+    require(
+        result.symbolTable.size() == 4,
+        "Tabela de simbolos incompleta."
+        );
+
+    requireContains(
+        result.assembly,
+        "v: 0, 0, 0, 0, 0\n"
+        "x: 0, 0, 0, 0, 0\n",
+        "Declaracoes contiguas dos vetores"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LD i\n"
+        "    ADDI 1\n"
+        "    STO $indr\n"
+        "    LD $in_port\n"
+        "    STOV v\n",
+        "Entrada em vetor com indice calculado"
+        );
+
+    requireContains(
+        result.assembly,
+        "    LD i\n"
+        "    ADDI 1\n"
+        "    STO $indr\n"
+        "    LDV v\n"
+        "    STO $out_port\n",
+        "Saida de vetor com indice calculado"
+        );
+
+    std::size_t vectorCount = 0;
+
+    for (const auto &symbol : result.symbolTable)
+    {
+        if (symbol.name == "v" || symbol.name == "x")
+        {
+            require(
+                symbol.kind == "vetor",
+                "Modalidade incorreta no vetor."
+                );
+
+            require(
+                symbol.type == "inteiro",
+                "Tipo incorreto no vetor."
+                );
+
+            require(
+                symbol.vectorSize.has_value() &&
+                    symbol.vectorSize.value() == 5,
+                "Tamanho do vetor incorreto."
+                );
+
+            require(
+                symbol.initialized,
+                "Vetor deveria estar inicializado."
+                );
+
+            require(
+                symbol.used,
+                "Vetor deveria estar marcado como usado."
+                );
+
+            ++vectorCount;
+        }
+    }
+
+    require(
+        vectorCount == 2,
+        "Vetores ausentes na tabela de simbolos."
+        );
+
+    std::cout
+        << "[OK] Regressao de indices calculados na IDE\n";
+}
+
+void testValidNestedVectorAnalysis()
+{
+    const std::string source = R"(programa semanticoVetores
+inicio
+inteiro v[5], x[5], i, resultado;
+
+i recebe 1;
+v[0] recebe 1;
+v[1] recebe 10;
+x[1] recebe 2;
+
+v[x[v[0]]] recebe v[i] mais 3;
+
+resultado recebe v[x[v[0]]];
+
+leia(v[x[v[0]]]);
+mostre(v[x[v[0]]]);
+mostre(resultado);
+fim)";
+
+    const CompilerService compiler;
+
+    const AnalysisResult analysis =
+        compiler.analyze(source);
+
+    require(
+        analysis.success,
+        "Analise de vetores aninhados falhou: " +
+            analysis.message
+        );
+
+    require(
+        analysis.errors.empty(),
+        "Vetores aninhados produziram erro semantico."
+        );
+
+    require(
+        analysis.assembly.empty(),
+        "Analise semantica gerou Assembly indevidamente."
+        );
+
+    const AnalysisResult compilation =
+        compiler.compile(source);
+
+    requireSuccess(
+        compilation,
+        "Compilacao de vetores aninhados"
+        );
+
+    require(
+        compilation.symbolTable.size() == 4,
+        "Tabela semantica de vetores aninhados incompleta."
+        );
+
+    require(
+        compilation.warnings.size() ==
+            analysis.warnings.size(),
+        "Avisos duplicados em acessos aninhados."
+        );
+
+    std::cout
+        << "[OK] Analise semantica de vetores aninhados\n";
+}
+
+void testSemanticIndexFailures()
+{
+    const std::vector<std::string> commands = {
+        "v[1.5] recebe 10;",
+        "v[f] recebe 10;",
+        "v[i mais f] recebe 10;",
+        "v[verdadeiro] recebe 10;",
+        "v[l] recebe 10;",
+        "v[i igual 1] recebe 10;",
+        "v['a'] recebe 10;",
+        "v[\"texto\"] recebe 10;",
+        "leia(v[1.5]);",
+        "leia(v[l]);",
+        "mostre(v[f]);",
+        "mostre(v[i igual 1]);",
+        "i recebe v[f];"
+    };
+
+    const CompilerService compiler;
+
+    for (const auto &command : commands)
+    {
+        const std::string source =
+            "programa indiceInvalido\n"
+            "inicio\n"
+            "inteiro v[5], i;\n"
+            "flutuante f;\n"
+            "logico l;\n"
+            "i recebe 1;\n"
+            "f recebe 1.5;\n"
+            "l recebe verdadeiro;\n"
+            "v[0] recebe 10;\n" +
+            command +
+            "\nfim";
+
+        const AnalysisResult analysis =
+            compiler.analyze(source);
+
+        requireFailure(
+            analysis,
+            AnalysisPhase::Semantic,
+            "Validacao semantica: " + command
+            );
+
+        requireContains(
+            analysis.errors.front().message,
+            "deve ser INTEIRO",
+            "Diagnostico de tipo do indice"
+            );
+
+        const AnalysisResult compilation =
+            compiler.compile(source);
+
+        requireFailure(
+            compilation,
+            AnalysisPhase::Semantic,
+            "Compilacao de indice invalido: " + command
+            );
+
+        requireContains(
+            compilation.errors.front().message,
+            "deve ser INTEIRO",
+            "Indice invalido bloqueia Assembly"
+            );
+    }
+
+    std::cout
+        << "[OK] Tipos invalidos nos indices recusados\n";
+}
+
+void testNestedInvalidIndexType()
+{
+    const std::string source = R"(programa indiceAninhadoInvalido
+inicio
+inteiro v[5];
+flutuante x[5];
+
+x[0] recebe 1.5;
+v[x[0]] recebe 20;
+fim)";
+
+    const CompilerService compiler;
+
+    const AnalysisResult analysis =
+        compiler.analyze(source);
+
+    requireFailure(
+        analysis,
+        AnalysisPhase::Semantic,
+        "Indice aninhado nao inteiro"
+        );
+
+    requireContains(
+        analysis.errors.front().message,
+        "Indice do vetor 'v' deve ser INTEIRO",
+        "Validacao do vetor externo"
+        );
+
+    const AnalysisResult compilation =
+        compiler.compile(source);
+
+    requireFailure(
+        compilation,
+        AnalysisPhase::Semantic,
+        "Indice aninhado invalido bloqueia Assembly"
+        );
+
+    std::cout
+        << "[OK] Tipo do indice aninhado validado\n";
+}
+
+void testInvalidVectorReferences()
+{
+    const std::vector<std::string> commands = {
+        "i[0] recebe 10;",
+        "leia(i[0]);",
+        "mostre(i[0]);",
+        "v recebe 10;",
+        "leia(v);",
+        "mostre(v);",
+        "i recebe v;"
+    };
+
+    const CompilerService compiler;
+
+    for (const auto &command : commands)
+    {
+        const std::string source =
+            "programa referenciaInvalida\n"
+            "inicio\n"
+            "inteiro i, v[3];\n"
+            "i recebe 1;\n"
+            "v[0] recebe 10;\n" +
+            command +
+            "\nfim";
+
+        const AnalysisResult result =
+            compiler.compile(source);
+
+        requireFailure(
+            result,
+            AnalysisPhase::Semantic,
+            "Referencia invalida: " + command
+            );
+    }
+
+    std::cout
+        << "[OK] Referencias invalidas de vetores recusadas\n";
+}
+
+void testLiteralIndexBoundsIntegration()
+{
+    const std::vector<std::string> commands = {
+        "v[3] recebe 10;",
+        "v[menos 1] recebe 10;",
+        "leia(v[3]);",
+        "leia(v[menos 1]);",
+        "mostre(v[3]);",
+        "mostre(v[menos 1]);",
+        "i recebe v[3];",
+        "i recebe v[menos 1];"
+    };
+
+    const CompilerService compiler;
+
+    for (const auto &command : commands)
+    {
+        const std::string source =
+            "programa limites\n"
+            "inicio\n"
+            "inteiro i, v[3];\n"
+            "i recebe 0;\n"
+            "v[0] recebe 10;\n" +
+            command +
+            "\nfim";
+
+        const AnalysisResult analysis =
+            compiler.analyze(source);
+
+        require(
+            analysis.success,
+            "Indice inteiro deveria passar pela "
+            "validacao de tipos: " + command
+            );
+
+        const AnalysisResult compilation =
+            compiler.compile(source);
+
+        requireFailure(
+            compilation,
+            AnalysisPhase::CodeGeneration,
+            "Limite de vetor: " + command
+            );
+
+        requireContains(
+            compilation.errors.front().message,
+            "Indice literal fora dos limites",
+            "Diagnostico de limite do vetor"
+            );
+    }
+
+    std::cout
+        << "[OK] Limites literais validados no gerador\n";
+}
+
+void testVectorAssemblyNotReused()
+{
+    const CompilerService compiler;
+
+    const AnalysisResult first =
+        compiler.compile(vectorRegressionSource);
+
+    requireSuccess(
+        first,
+        "Primeira compilacao de vetores"
+        );
+
+    const std::string invalidSource = R"(programa erroVetor
+inicio
+inteiro v[3];
+v[menos 1] recebe 10;
+fim)";
+
+    const AnalysisResult second =
+        compiler.compile(invalidSource);
+
+    requireFailure(
+        second,
+        AnalysisPhase::CodeGeneration,
+        "Compilacao com indice invalido"
+        );
+
+    require(
+        second.assembly.empty(),
+        "Assembly anterior foi mantido indevidamente."
+        );
+
+    const AnalysisResult third =
+        compiler.compile(vectorRegressionSource);
+
+    requireSuccess(
+        third,
+        "Nova compilacao valida de vetores"
+        );
+
+    require(
+        third.assembly == first.assembly,
+        "Compilacao de vetores nao deterministica."
+        );
+
+    std::cout
+        << "[OK] Assembly de vetores nao reutilizado\n";
+}
+
 }
 
 int main()
 {
     try
     {
+        // Testes originais.
         testOriginalAnalysisPreserved();
         testBasicAssemblyIntegration();
         testVectorBitwiseAndIo();
@@ -546,11 +1134,22 @@ int main()
 
         testUnsupportedOperation();
         testUnsupportedDataType();
-        testUnsupportedControlFlow();
+        testConditionalControlFlow();
+        testLoopsSupported();
+        testLoopConditionCanAccessBodyScope();
 
         testWarningsNotDuplicated();
         testPreviousAssemblyNotReused();
         testGeneratorOriginalApi();
+
+        // Regressoes da M2.2.
+        testVectorIndexRegression();
+        testValidNestedVectorAnalysis();
+        testSemanticIndexFailures();
+        testNestedInvalidIndexType();
+        testInvalidVectorReferences();
+        testLiteralIndexBoundsIntegration();
+        testVectorAssemblyNotReused();
 
         std::cout
             << "Todos os testes de integracao da IDE BIP passaram.\n";

@@ -13,7 +13,7 @@ Este projeto implementa uma IDE para análise léxica, sintática e semântica d
 
 Os analisadores foram construídos com auxílio do **WebGALS** e integrados a uma aplicação desktop desenvolvida em **C++ com Qt Widgets**.
 
-Atualmente o projeto contempla as funcionalidades desenvolvidas até a **M2.1**, incluindo:
+Atualmente o projeto contempla as funcionalidades desenvolvidas até a **M3.1**, incluindo:
 
 - análise léxica;
 - análise sintática;
@@ -24,7 +24,14 @@ Atualmente o projeto contempla as funcionalidades desenvolvidas até a **M2.1**,
 - verificação de unicidade;
 - controle de uso e inicialização;
 - sistema de compatibilidade de tipos;
-- visualização da tabela de símbolos na IDE.
+- visualização da tabela de símbolos na IDE;
+- geração de Assembly para a arquitetura BIP;
+- entrada, saída, atribuições e operações aritméticas e bit a bit;
+- acesso a variáveis e vetores;
+- expressões relacionais e lógicas;
+- condicionais `se` e `se/senao`;
+- laços `enquanto`, `faca/ate` e `para`;
+- estruturas de controle aninhadas.
 
 ## Fluxo da aplicação
 
@@ -50,11 +57,15 @@ O fluxo principal da compilação é:
         ↓
     Sistema de tipos
         ↓
+    Representação intermediária BIP
+        ↓
+    Geração de Assembly BIP
+        ↓
     AnalysisResult
         ↓
     MainWindow
         ↓
-    Mensagens e tabela de símbolos
+    Mensagens, tabela de símbolos e Assembly BIP
 
 A interface gráfica não acessa diretamente os componentes internos do compilador.
 
@@ -74,7 +85,8 @@ A IDE possui:
 - exibição de erros semânticos;
 - exibição de avisos semânticos;
 - indicação da posição do erro quando disponível;
-- tabela visual de símbolos.
+- tabela visual de símbolos;
+- exibição do Assembly BIP gerado.
 
 A tabela de símbolos apresenta:
 
@@ -186,6 +198,14 @@ Conversões potencialmente perigosas podem produzir avisos semânticos sem imped
     │   ├── CompilerService.cpp
     │   ├── CompilerService.h
     │   │
+    │   ├── codegen/
+    │   │   ├── BipCodeGenerator.cpp
+    │   │   ├── BipCodeGenerator.h
+    │   │   ├── BipEmitter.cpp
+    │   │   ├── BipIr.h
+    │   │   ├── BipIrBuilder.cpp
+    │   │   └── BipIrBuilder.h
+    │   │
     │   └── semantic/
     │       ├── DeclarationProcessor.cpp
     │       ├── DeclarationProcessor.h
@@ -207,6 +227,9 @@ Conversões potencialmente perigosas podem produzir avisos semânticos sem imped
     └── main.cpp
 
     tests/
+    ├── BipCodeGeneratorTest.cpp
+    ├── BipIdeIntegrationTest.cpp
+    ├── BipM31Test.cpp
     ├── CompilerServiceSmokeTest.cpp
     ├── ScopeManagerTest.cpp
     ├── SemanticIntegrationTest.cpp
@@ -241,6 +264,18 @@ Os principais componentes são:
 - `CompilerService`: coordena as análises;
 - `AnalysisResult`: transporta resultado, erros, avisos e tabela de símbolos.
 
+### `src/compiler/codegen`
+
+Contém a geração de Assembly para a arquitetura BIP:
+
+- `BipIrBuilder`: constrói a representação intermediária a partir do resultado semântico;
+- `BipEmitter`: emite as seções de dados e texto, instruções e rótulos BIP;
+- `BipCodeGenerator`: coordena a geração e devolve diagnósticos de operações não suportadas.
+
+A geração implementada até a M3.1 contempla variáveis, vetores, entrada e saída,
+expressões aritméticas, bit a bit, relacionais e lógicas, condicionais e os laços
+`enquanto`, `faca/ate` e `para`, inclusive em estruturas aninhadas.
+
 ### `src/compiler/semantic`
 
 Contém a infraestrutura semântica da aplicação.
@@ -263,7 +298,8 @@ A `MainWindow` é responsável por:
 - obter o código-fonte;
 - executar o `CompilerService`;
 - exibir mensagens;
-- exibir a tabela de símbolos.
+- exibir a tabela de símbolos;
+- exibir o Assembly BIP gerado.
 
 ## Testes
 
@@ -311,6 +347,31 @@ Valida a integração dos requisitos da M2.1, incluindo:
 - funções;
 - expressões;
 - atribuições.
+
+### BipCodeGeneratorTest
+
+Valida a geração BIP da M2.2, incluindo declarações, vetores, entrada e saída,
+atribuições, expressões aritméticas e operações bit a bit.
+
+### BipIdeIntegrationTest
+
+Valida a integração do gerador BIP com o `CompilerService` e garante que erros
+léxicos, sintáticos, semânticos ou de geração não reutilizem Assembly anterior.
+
+### BipM31Test
+
+Valida os requisitos da M3.1:
+
+- operações relacionais e lógicas;
+- condicionais simples e compostos;
+- laços `enquanto`, `faca/ate` e `para`;
+- estruturas de controle aninhadas;
+- geração determinística de rótulos;
+- prevenção de colisões entre rótulos, variáveis e temporários.
+
+O Assembly gerado deve ser aberto no Bipide como arquivo `.as`. A extensão `.bip`
+é destinada a programas Portugol e faz o Bipide interpretar incorretamente as
+diretivas `.data` e `.text`.
 
 ## Build
 
