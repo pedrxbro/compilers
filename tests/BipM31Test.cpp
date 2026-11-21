@@ -1047,6 +1047,271 @@ fim)";
         );
 }
 
+// ============================================================
+// LACO PARA - M3.1
+// ============================================================
+
+void testInitialForWithVectors()
+{
+    const std::string source = R"(programa testePara
+inicio
+inteiro i, v[5];
+
+para i recebe 0 ate i menorQue 5 passo i recebe i mais 1 faca
+    v[i] recebe i mais 10;
+fimpara
+
+para i recebe 0 ate i menorQue 5 passo i recebe i mais 1 faca
+    mostre(v[i]);
+fimpara
+
+fim)";
+
+    requireOutput(
+        source,
+        {},
+        {10, 11, 12, 13, 14},
+        "Para com escrita e leitura de vetores"
+        );
+}
+
+void testForIncrementAndDecrement()
+{
+    const std::string source = R"(programa passosPara
+inicio
+inteiro i;
+
+para i recebe 1 ate i menorIgualQue 7 passo i recebe i mais 2 faca
+    mostre(i);
+fimpara
+
+para i recebe 6 ate i maiorIgualQue 0 passo i recebe i menos 3 faca
+    mostre(i);
+fimpara
+
+fim)";
+
+    requireOutput(
+        source,
+        {},
+        {1, 3, 5, 7, 6, 3, 0},
+        "Para com incrementos e decrementos diferentes de um"
+        );
+}
+
+void testForZeroIterations()
+{
+    const std::string source = R"(programa paraVazio
+inicio
+inteiro i;
+
+para i recebe 10 ate i menorQue 4 passo i recebe i mais 2 faca
+    mostre(99);
+fimpara
+
+mostre(i);
+fim)";
+
+    requireOutput(
+        source,
+        {},
+        {10},
+        "Para com zero iteracoes"
+        );
+}
+
+void testForCompoundConditions()
+{
+    const std::string source = R"(programa paraComposto
+inicio
+inteiro i, limite;
+
+limite recebe 6;
+
+para i recebe 0 ate
+    (i menorQue limite) e (i diferente 4)
+    passo i recebe i mais 1 faca
+    mostre(i);
+fimpara
+
+fim)";
+
+    requireOutput(
+        source,
+        {},
+        {0, 1, 2, 3},
+        "Para com condicoes logicas compostas"
+        );
+}
+
+void testForIndexExpressions()
+{
+    const std::string source = R"(programa paraIndices
+inicio
+inteiro i, v[6];
+
+para i recebe 0 ate i menorQue 3 passo i recebe i mais 1 faca
+    v[i mais 1] recebe i mais 20;
+fimpara
+
+para i recebe 1 ate i menorIgualQue 3 passo i recebe i mais 1 faca
+    mostre(v[i]);
+fimpara
+
+fim)";
+
+    requireOutput(
+        source,
+        {},
+        {20, 21, 22},
+        "Para com expressoes nos indices de vetores"
+        );
+}
+
+void testForExpressionAsStep()
+{
+    const std::string source = R"(programa paraPassoExpressao
+inicio
+inteiro i, incremento;
+
+incremento recebe 1;
+
+para i recebe 0 ate i menorQue 7 passo i recebe i mais (incremento mais 1) faca
+    mostre(i);
+fimpara
+
+fim)";
+
+    requireOutput(
+        source,
+        {},
+        {0, 2, 4, 6},
+        "Para com expressao composta no passo"
+        );
+}
+
+void testNestedForAndScopes()
+{
+    const std::string source = R"(programa paraAninhado
+inicio
+inteiro i, j, resultado;
+
+para i recebe 0 ate i menorQue 2 passo i recebe i mais 1 faca
+    inteiro local;
+    local recebe i mais 10;
+
+    para j recebe 0 ate j menorQue 3 passo j recebe j mais 1 faca
+        resultado recebe local mais j;
+        mostre(resultado);
+    fimpara
+fimpara
+
+fim)";
+
+    requireOutput(
+        source,
+        {},
+        {10, 11, 12, 11, 12, 13},
+        "Para aninhado e escopos internos"
+        );
+}
+
+void testForWithConditionalAndWhile()
+{
+    const std::string source = R"(programa paraComDesvios
+inicio
+inteiro i, j;
+
+para i recebe 0 ate i menorQue 3 passo i recebe i mais 1 faca
+    se i igual 1 entao
+        mostre(9);
+    senao
+        mostre(i);
+    fimse
+
+    j recebe 0;
+    enquanto j menorQue 2 faca
+        j recebe j mais 1;
+    fimenquanto
+
+    mostre(j);
+fimpara
+
+fim)";
+
+    requireOutput(
+        source,
+        {},
+        {0, 2, 9, 2, 2, 2},
+        "Para com condicional e enquanto aninhados"
+        );
+}
+
+void testForInvalidConditionRejected()
+{
+    const std::string source = R"(programa paraCondicaoInvalida
+inicio
+inteiro i;
+
+para i recebe 0 ate i mais 1 passo i recebe i mais 1 faca
+    mostre(i);
+fimpara
+
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto result = generator.generate(source);
+
+    require(
+        !result.success,
+        "Condicao nao logica do para deveria falhar."
+        );
+
+    require(
+        result.assembly.empty(),
+        "Condicao invalida gerou Assembly parcial."
+        );
+
+    require(
+        !result.message.empty(),
+        "Diagnostico de condicao invalida ausente."
+        );
+}
+
+void testForDeterminism()
+{
+    const std::string source = R"(programa paraDeterministico
+inicio
+inteiro i;
+
+para i recebe 0 ate i menorQue 3 passo i recebe i mais 1 faca
+    mostre(i);
+fimpara
+
+fim)";
+
+    const bip::BipCodeGenerator generator;
+    const auto first = generator.generate(source);
+    const auto second = generator.generate(source);
+
+    require(
+        first.success && second.success,
+        "Geracao do para falhou."
+        );
+
+    require(
+        first.assembly == second.assembly,
+        "Geracao do para nao e deterministica."
+        );
+
+    AssemblyMachine machine(first.assembly);
+
+    require(
+        machine.execute() == std::vector<int>{0, 1, 2},
+        "Execucao do para deterministico incorreta."
+        );
+}
+
 }
 
 int main()
@@ -1068,6 +1333,17 @@ int main()
         testVectorsAndInputInLoops();
         testComposedConditionsAndNestedLoops();
         testLoopScopesAndLabelCollisions();
+
+        testInitialForWithVectors();
+        testForIncrementAndDecrement();
+        testForZeroIterations();
+        testForCompoundConditions();
+        testForIndexExpressions();
+        testForExpressionAsStep();
+        testNestedForAndScopes();
+        testForWithConditionalAndWhile();
+        testForInvalidConditionRejected();
+        testForDeterminism();
 
         std::cout
             << "Todos os testes M3.1 passaram.\n";

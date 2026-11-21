@@ -1,6 +1,5 @@
 #include "BipIr.h"
 
-#include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <sstream>
@@ -28,7 +27,6 @@ struct Temporary
     bool inUse = false;
 };
 
-
 std::string normalizedName(const std::string &name)
 {
     std::string result = name;
@@ -44,7 +42,6 @@ std::string normalizedName(const std::string &name)
 
     return result;
 }
-
 
 bool fitsImmediate(int value)
 {
@@ -1158,6 +1155,77 @@ private:
         label(endLabel);
     }
 
+    void emitFor(const Statement &statement)
+    {
+        if (!statement.expression)
+        {
+            throw CodegenError(
+                "Laco para sem condicao."
+                );
+        }
+
+        if (statement.initializationStatements.size() != 1 ||
+            statement.postStatements.size() != 1)
+        {
+            throw CodegenError(
+                "Laco para exige inicializacao "
+                "e pos-operacao."
+                );
+        }
+
+        if (statement.initializationStatements.front().kind !=
+                StatementKind::Assignment ||
+            statement.postStatements.front().kind !=
+                StatementKind::Assignment)
+        {
+            throw CodegenError(
+                "Operacao invalida no cabecalho do laco para."
+                );
+        }
+
+        // 1. Inicializacao, executada uma unica vez.
+        emitStatementList(
+            statement.initializationStatements
+            );
+
+        const std::string conditionLabel =
+            newLabel();
+
+        const std::string bodyLabel =
+            newLabel();
+
+        const std::string endLabel =
+            newLabel();
+
+        // 2. Inicio e 3. avaliacao da condicao.
+        label(conditionLabel);
+
+        // 4. Condicao falsa desvia diretamente ao fim.
+        emitCondition(
+            statement.expression,
+            bodyLabel,
+            endLabel
+            );
+
+        // 5. Corpo do laco.
+        label(bodyLabel);
+
+        emitStatementList(
+            statement.loopStatements
+            );
+
+        // 6. Pos-operacao, depois de todo o corpo.
+        emitStatementList(
+            statement.postStatements
+            );
+
+        // 7. Nova avaliacao da condicao.
+        instruction("JMP", conditionLabel);
+
+        // 8. Encerramento.
+        label(endLabel);
+    }
+
     void emitStatement(const Statement &statement)
     {
         switch (statement.kind)
@@ -1184,6 +1252,10 @@ private:
 
         case StatementKind::RepeatUntil:
             emitRepeatUntil(statement);
+            return;
+
+        case StatementKind::For:
+            emitFor(statement);
             return;
         }
 

@@ -616,6 +616,7 @@ private:
                !check(t_FIMSE) &&
                !check(t_SENAO) &&
                !check(t_FIMENQUANTO) &&
+               !check(t_FIMPARA) &&
                !check(t_ATE))
         {
             if (check(DOLLAR))
@@ -648,6 +649,10 @@ private:
             else if (check(t_ENQUANTO))
             {
                 parseWhile(statements);
+            }
+            else if (check(t_PARA))
+            {
+                parseFor(statements);
             }
             else if (check(t_FACA))
             {
@@ -828,6 +833,32 @@ private:
         }
 
         return target;
+    }
+
+    // O cabecalho de PARA usa atribuicoes sem
+    // ponto e virgula, conforme a gramatica v2.0.3.
+    Statement parseControlOperation()
+    {
+        Target target = parseTarget();
+
+        if (target.index)
+        {
+            fail(
+                "Variavel escalar esperada no controle do para."
+                );
+        }
+
+        consume(
+            t_RECEBE,
+            "Operador 'recebe' esperado no laco para."
+            );
+
+        Statement statement;
+        statement.kind = StatementKind::Assignment;
+        statement.destination = std::move(target.name);
+        statement.expression = parseExpression(1);
+
+        return statement;
     }
 
     void parseAssignment(
@@ -1040,6 +1071,65 @@ private:
         consume(
             t_FIMENQUANTO,
             "Palavra 'fimenquanto' esperada."
+            );
+
+        statements.push_back(
+            std::move(statement)
+            );
+    }
+
+    void parseFor(
+        std::vector<Statement> &statements
+        )
+    {
+        consume(
+            t_PARA,
+            "Palavra 'para' esperada."
+            );
+
+        // A acao semantica #46 ocorre imediatamente
+        // apos PARA e cria o escopo "para".
+        enterScope("para");
+
+        Statement statement;
+        statement.kind = StatementKind::For;
+
+        statement.initializationStatements.push_back(
+            parseControlOperation()
+            );
+
+        consume(
+            t_ATE,
+            "Palavra 'ate' esperada no laco para."
+            );
+
+        statement.expression = parseExpression(1);
+
+        consume(
+            t_PASSO,
+            "Palavra 'passo' esperada no laco para."
+            );
+
+        // Embora apareca antes de FACA na fonte,
+        // esta operacao so executa depois do corpo.
+        statement.postStatements.push_back(
+            parseControlOperation()
+            );
+
+        consume(
+            t_FACA,
+            "Palavra 'faca' esperada no laco para."
+            );
+
+        parseStatementList(statement.loopStatements);
+
+        // A acao semantica #47 encerra o escopo
+        // imediatamente antes de FIMPARA.
+        leaveScope();
+
+        consume(
+            t_FIMPARA,
+            "Palavra 'fimpara' esperada."
             );
 
         statements.push_back(
