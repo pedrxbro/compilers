@@ -1,4 +1,3 @@
-
 #ifndef BIP_IR_H
 #define BIP_IR_H
 
@@ -16,8 +15,10 @@ namespace bip
 enum class Operation
 {
     Literal,
+    BooleanLiteral,
     Variable,
     VectorElement,
+
     Add,
     Subtract,
     BitwiseAnd,
@@ -26,7 +27,18 @@ enum class Operation
     BitwiseNot,
     Negate,
     ShiftLeft,
-    ShiftRight
+    ShiftRight,
+
+    Equal,
+    NotEqual,
+    Greater,
+    Less,
+    GreaterEqual,
+    LessEqual,
+
+    LogicalAnd,
+    LogicalOr,
+    LogicalNot
 };
 
 struct Expression;
@@ -57,7 +69,8 @@ enum class StatementKind
 {
     Assignment,
     Input,
-    Output
+    Output,
+    Conditional
 };
 
 struct Statement
@@ -67,12 +80,21 @@ struct Statement
     std::string destination;
     ExpressionPtr destinationIndex;
     ExpressionPtr expression;
+
+    // Usado exclusivamente por comandos condicionais.
+    std::vector<Statement> thenStatements;
+    std::vector<Statement> elseStatements;
+    bool hasElse = false;
 };
 
 struct Program
 {
     std::vector<Declaration> declarations;
     std::vector<Statement> statements;
+
+    // Identificadores originais reservados para impedir
+    // conflitos entre nomes de usuario e rotulos internos.
+    std::vector<std::string> reservedNames;
 };
 
 class CodegenError : public std::runtime_error
@@ -108,7 +130,9 @@ public:
 class BipEmitter
 {
 public:
-    std::string emit(const Program &program) const;
+    std::string emit(
+        const Program &program
+        ) const;
 };
 
 }

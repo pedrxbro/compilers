@@ -4,6 +4,8 @@
 #include "Lexico.h"
 #include "Token.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <limits>
 #include <memory>
@@ -29,7 +31,9 @@ struct SourceToken
 struct KnownSymbol
 {
     bool isVector = false;
+    bool isSupported = false;
     std::size_t size = 1;
+    std::string assemblyName;
 };
 
 struct Target
@@ -38,11 +42,38 @@ struct Target
     ExpressionPtr index;
 };
 
+std::string normalizedName(const std::string &name)
+{
+    std::string result = name;
+
+    std::transform(
+        result.begin(),
+        result.end(),
+        result.begin(),
+        [](unsigned char character)
+        {
+            return static_cast<char>(
+                std::toupper(character)
+                );
+        }
+        );
+
+    return result;
+}
+
 ExpressionPtr makeLiteral(int value)
 {
     auto expression = std::make_shared<Expression>();
     expression->operation = Operation::Literal;
     expression->value = value;
+    return expression;
+}
+
+ExpressionPtr makeBoolean(bool value)
+{
+    auto expression = std::make_shared<Expression>();
+    expression->operation = Operation::BooleanLiteral;
+    expression->value = value ? 1 : 0;
     return expression;
 }
 
@@ -90,12 +121,6 @@ ExpressionPtr makeBinary(
     return expression;
 }
 
-// Reconhece indices literais, inclusive quando envolvidos
-// por uma ou mais negacoes unarias.
-//
-// Nao avalia expressoes dinamicas nem altera a IR.
-// Os parenteses ja sao tratados pelo parser.
-
 std::optional<long long> literalIndexValue(
     const ExpressionPtr &expression
     )
@@ -124,26 +149,44 @@ std::optional<long long> literalIndexValue(
     return std::nullopt;
 }
 
+// Os niveis acompanham a ordem da gramatica v2.0.3.
+// Todos os operadores binarios sao associativos a esquerda.
 int precedence(TokenId id)
 {
     switch (id)
     {
-    case t_OU_BIT_BIT:
+    case t_OU_LOGICO:
         return 1;
 
-    case t_OU_EXCLUSIVO_BIT_BIT:
+    case t_E_LOGICO:
         return 2;
 
-    case t_E_BIT_BIT:
+    case t_OU_BIT_BIT:
         return 3;
+
+    case t_OU_EXCLUSIVO_BIT_BIT:
+        return 4;
+
+    case t_E_BIT_BIT:
+        return 5;
+
+    case t_IGUAL:
+    case t_DIFERENTE:
+        return 6;
+
+    case t_MAIOR_QUE:
+    case t_MENOR_QUE:
+    case t_MAIOR_IGUAL_QUE:
+    case t_MENOR_IGUAL_QUE:
+        return 7;
 
     case t_DESLOCA_DIREITA:
     case t_DESLOCA_ESQUERDA:
-        return 4;
+        return 8;
 
     case t_MAIS:
     case t_MENOS:
-        return 5;
+        return 9;
 
     default:
         return -1;
@@ -174,6 +217,30 @@ Operation binaryOperation(TokenId id)
 
     case t_DESLOCA_DIREITA:
         return Operation::ShiftRight;
+
+    case t_IGUAL:
+        return Operation::Equal;
+
+    case t_DIFERENTE:
+        return Operation::NotEqual;
+
+    case t_MAIOR_QUE:
+        return Operation::Greater;
+
+    case t_MENOR_QUE:
+        return Operation::Less;
+
+    case t_MAIOR_IGUAL_QUE:
+        return Operation::GreaterEqual;
+
+    case t_MENOR_IGUAL_QUE:
+        return Operation::LessEqual;
+
+    case t_E_LOGICO:
+        return Operation::LogicalAnd;
+
+    case t_OU_LOGICO:
+        return Operation::LogicalOr;
 
     default:
         throw CodegenError(
@@ -256,33 +323,89 @@ public:
                 );
         }
 
-        for (const auto &symbol : analysis.symbolTable)
+        // Primeiro reserva os nomes originais para que
+        // rotulos de variaveis locais nao colidam com eles.
+        for (const SymbolTableEntry &symbol :
+             analysis.symbolTable)
         {
-            if (symbol.scope != "global" ||
-                symbol.type != "inteiro")
+            reservedAssemblyNames_.insert(
+                normalizedName(symbol.name)
+                );
+
+            program_.reservedNames.push_back(symbol.name);
+        }
+
+        reservedAssemblyNames_.insert("_PRINCIPAL");
+
+        // Ordenacao deterministica, independente da ordem
+        // interna da tabela de simbolos do analisador.
+        std::vector<const SymbolTableEntry *> ordered;
+
+        for (const SymbolTableEntry &symbol :
+             analysis.symbolTable)
+        {
+            ordered.push_back(&symbol);
+        }
+
+        std::sort(
+            ordered.begin(),
+            ordered.end(),
+            [](const SymbolTableEntry *left,
+               const SymbolTableEntry *right)
+            {
+                if (left->scope != right->scope)
+                {
+                    return left->scope < right->scope;
+                }
+
+                if (left->name != right->name)
+                {
+                    return left->name < right->name;
+                }
+
+                return left->kind < right->kind;
+            }
+            );
+
+        for (const SymbolTableEntry *symbol : ordered)
+        {
+            if (symbol->kind != "variavel" &&
+                symbol->kind != "vetor")
             {
                 continue;
             }
 
-            if (symbol.kind == "variavel" &&
-                !symbol.vectorSize.has_value())
+            KnownSymbol known;
+
+            known.isVector = symbol->kind == "vetor";
+            known.isSupported = symbol->type == "inteiro";
+
+            if (known.isVector)
             {
-                knownSymbols_.emplace(
-                    symbol.name,
-                    KnownSymbol{false, 1}
-                    );
+                known.size =
+                    symbol->vectorSize.value_or(0);
             }
-            else if (
-                symbol.kind == "vetor" &&
-                symbol.vectorSize.has_value() &&
-                symbol.vectorSize.value() > 0)
+
+            if (symbol->scope == "global")
             {
-                knownSymbols_.emplace(
-                    symbol.name,
-                    KnownSymbol{
-                        true,
-                        symbol.vectorSize.value()
-                    }
+                known.assemblyName = symbol->name;
+            }
+            else
+            {
+                known.assemblyName =
+                    allocateLocalName();
+            }
+
+            const bool inserted =
+                symbols_[symbol->scope]
+                    .emplace(symbol->name, known)
+                    .second;
+
+            if (!inserted)
+            {
+                throw CodegenError(
+                    "Tabela de simbolos com declaracao "
+                    "duplicada no mesmo escopo."
                     );
             }
         }
@@ -313,41 +436,17 @@ public:
             "Palavra 'inicio' esperada."
             );
 
-        while (!check(t_FIM))
-        {
-            if (check(DOLLAR))
-            {
-                fail("Fim do programa nao encontrado.");
-            }
+        parseStatementList(program_.statements);
 
-            if (check(t_INTEIRO))
-            {
-                parseDeclaration();
-            }
-            else if (check(t_IDENTIFICADOR))
-            {
-                parseAssignment();
-            }
-            else if (check(t_LEIA))
-            {
-                parseInput();
-            }
-            else if (check(t_MOSTRE))
-            {
-                parseOutput();
-            }
-            else
-            {
-                fail(
-                    "Comando ou declaracao sem suporte "
-                    "no gerador BIP: '" +
-                    current().lexeme + "'."
-                    );
-            }
-        }
+        consume(
+            t_FIM,
+            "Palavra 'fim' esperada."
+            );
 
-        consume(t_FIM, "Palavra 'fim' esperada.");
-        consume(DOLLAR, "Tokens apos o fim do programa.");
+        consume(
+            DOLLAR,
+            "Tokens apos o fim do programa."
+            );
 
         if (index_ != tokens_.size())
         {
@@ -400,11 +499,56 @@ private:
             );
     }
 
-    static bool reservedName(const std::string &name)
+    static bool reservedName(
+        const std::string &name
+        )
     {
-        return name == "_PRINCIPAL" ||
+        return normalizedName(name) == "_PRINCIPAL" ||
                name.rfind("__bip_tmp_", 0) == 0 ||
                name.rfind("__bip_vec_slot_", 0) == 0;
+    }
+
+    std::string allocateLocalName()
+    {
+        for (;;)
+        {
+            const std::string name =
+                "__bip_local_" +
+                std::to_string(nextLocalId_++);
+
+            if (reservedAssemblyNames_.insert(
+                                          normalizedName(name)
+                                          ).second)
+            {
+                return name;
+            }
+        }
+    }
+
+    // Reproduz a identificacao dos escopos internos
+    // utilizada pelo ScopeManager na analise semantica.
+    void enterScope(const std::string &label)
+    {
+        const std::string qualifiedName =
+            scopeStack_.back() +
+            "::" +
+            label +
+            "#" +
+            std::to_string(nextInternalScopeIndex_++);
+
+        scopeStack_.push_back(qualifiedName);
+    }
+
+    void leaveScope()
+    {
+        if (scopeStack_.size() <= 1)
+        {
+            throw CodegenError(
+                "Tentativa de sair do escopo global."
+                );
+        }
+
+        scopeStack_.pop_back();
     }
 
     const KnownSymbol &requireSymbol(
@@ -420,25 +564,102 @@ private:
                 );
         }
 
-        const auto found =
-            knownSymbols_.find(token.lexeme);
-
-        if (found == knownSymbols_.end())
+        // A busca parte do escopo atual e percorre
+        // exclusivamente seus ancestrais.
+        for (auto scope = scopeStack_.rbegin();
+             scope != scopeStack_.rend();
+             ++scope)
         {
-            throw CodegenError(
-                "Identificador '" + token.lexeme +
-                    "' nao corresponde a variavel ou "
-                    "vetor inteiro global validado.",
-                token.position
-                );
+            const auto scopeFound =
+                symbols_.find(*scope);
+
+            if (scopeFound == symbols_.end())
+            {
+                continue;
+            }
+
+            const auto found =
+                scopeFound->second.find(token.lexeme);
+
+            if (found == scopeFound->second.end())
+            {
+                continue;
+            }
+
+            if (!found->second.isSupported)
+            {
+                throw CodegenError(
+                    "O gerador BIP suporta apenas "
+                    "variaveis e vetores inteiros: " +
+                        token.lexeme,
+                    token.position
+                    );
+            }
+
+            return found->second;
         }
 
-        return found->second;
+        throw CodegenError(
+            "Identificador '" +
+                token.lexeme +
+                "' nao corresponde a variavel ou vetor "
+                "inteiro visivel no escopo atual.",
+            token.position
+            );
+    }
+
+    void parseStatementList(
+        std::vector<Statement> &statements
+        )
+    {
+        while (!check(t_FIM) &&
+               !check(t_FIMSE) &&
+               !check(t_SENAO))
+        {
+            if (check(DOLLAR))
+            {
+                fail(
+                    "Fim inesperado da lista de comandos."
+                    );
+            }
+
+            if (check(t_INTEIRO))
+            {
+                parseDeclaration();
+            }
+            else if (check(t_IDENTIFICADOR))
+            {
+                parseAssignment(statements);
+            }
+            else if (check(t_LEIA))
+            {
+                parseInput(statements);
+            }
+            else if (check(t_MOSTRE))
+            {
+                parseOutput(statements);
+            }
+            else if (check(t_SE))
+            {
+                parseConditional(statements);
+            }
+            else
+            {
+                fail(
+                    "Comando ou declaracao sem suporte "
+                    "no gerador BIP: '" +
+                    current().lexeme + "'."
+                    );
+            }
+        }
     }
 
     void parseDeclaration()
     {
-        consume(t_INTEIRO, "Tipo inteiro esperado.");
+        consume(
+            t_INTEIRO,
+            "Tipo inteiro esperado."
+            );
 
         do
         {
@@ -476,7 +697,9 @@ private:
                         );
                 }
 
-                size = static_cast<std::size_t>(parsedSize);
+                size =
+                    static_cast<std::size_t>(parsedSize);
+
                 isVector = true;
 
                 consume(
@@ -489,13 +712,16 @@ private:
                 size != symbol.size)
             {
                 throw CodegenError(
-                    "Declaracao de '" + identifier.lexeme +
+                    "Declaracao de '" +
+                        identifier.lexeme +
                         "' diverge da tabela de simbolos.",
                     identifier.position
                     );
             }
 
-            if (!declaredNames_.insert(identifier.lexeme).second)
+            if (!declaredNames_.insert(
+                                   symbol.assemblyName
+                                   ).second)
             {
                 throw CodegenError(
                     "Declaracao duplicada no IR: " +
@@ -505,7 +731,11 @@ private:
             }
 
             program_.declarations.push_back(
-                {identifier.lexeme, size, isVector}
+                {
+                    symbol.assemblyName,
+                    size,
+                    isVector
+                }
                 );
 
             if (!check(t_VIRGULA))
@@ -534,7 +764,7 @@ private:
             requireSymbol(identifier);
 
         Target target;
-        target.name = identifier.lexeme;
+        target.name = symbol.assemblyName;
 
         if (check(t_ABRE_COLCHETE))
         {
@@ -556,23 +786,22 @@ private:
                 "Colchete de fechamento esperado."
                 );
 
-            // Valida indices literais positivos e negativos.
-            // Indices dinamicos continuam sendo calculados
-            // durante a execucao do Assembly.
-
             const auto literal =
                 literalIndexValue(target.index);
 
             if (literal.has_value())
             {
-                const long long value = literal.value();
+                const long long value =
+                    literal.value();
 
                 if (value < 0 ||
-                    static_cast<std::size_t>(value) >= symbol.size)
+                    static_cast<std::size_t>(value) >=
+                        symbol.size)
                 {
                     throw CodegenError(
                         "Indice literal fora dos limites "
-                        "do vetor '" + identifier.lexeme + "'.",
+                        "do vetor '" +
+                            identifier.lexeme + "'.",
                         identifier.position
                         );
                 }
@@ -581,7 +810,8 @@ private:
         else if (symbol.isVector)
         {
             throw CodegenError(
-                "Acesso ao vetor '" + identifier.lexeme +
+                "Acesso ao vetor '" +
+                    identifier.lexeme +
                     "' exige um indice.",
                 identifier.position
                 );
@@ -590,7 +820,9 @@ private:
         return target;
     }
 
-    void parseAssignment()
+    void parseAssignment(
+        std::vector<Statement> &statements
+        )
     {
         Target target = parseTarget();
 
@@ -599,7 +831,8 @@ private:
             "Operador 'recebe' esperado."
             );
 
-        ExpressionPtr expression = parseExpression(1);
+        ExpressionPtr expression =
+            parseExpression(1);
 
         consume(
             t_PONTO_VIRGULA,
@@ -610,17 +843,23 @@ private:
         Statement statement;
         statement.kind = StatementKind::Assignment;
         statement.destination = std::move(target.name);
-        statement.destinationIndex = std::move(target.index);
+        statement.destinationIndex =
+            std::move(target.index);
         statement.expression = std::move(expression);
 
-        program_.statements.push_back(
+        statements.push_back(
             std::move(statement)
             );
     }
 
-    void parseInput()
+    void parseInput(
+        std::vector<Statement> &statements
+        )
     {
-        consume(t_LEIA, "Palavra 'leia' esperada.");
+        consume(
+            t_LEIA,
+            "Palavra 'leia' esperada."
+            );
 
         consume(
             t_ABRE_PARENTESE,
@@ -642,16 +881,22 @@ private:
         Statement statement;
         statement.kind = StatementKind::Input;
         statement.destination = std::move(target.name);
-        statement.destinationIndex = std::move(target.index);
+        statement.destinationIndex =
+            std::move(target.index);
 
-        program_.statements.push_back(
+        statements.push_back(
             std::move(statement)
             );
     }
 
-    void parseOutput()
+    void parseOutput(
+        std::vector<Statement> &statements
+        )
     {
-        consume(t_MOSTRE, "Palavra 'mostre' esperada.");
+        consume(
+            t_MOSTRE,
+            "Palavra 'mostre' esperada."
+            );
 
         consume(
             t_ABRE_PARENTESE,
@@ -706,25 +951,72 @@ private:
         statement.kind = StatementKind::Output;
         statement.expression = std::move(expression);
 
-        program_.statements.push_back(
+        statements.push_back(
             std::move(statement)
             );
     }
 
-    ExpressionPtr parseExpression(int minPrecedence)
+    void parseConditional(
+        std::vector<Statement> &statements
+        )
+    {
+        consume(
+            t_SE,
+            "Palavra 'se' esperada."
+            );
+
+        Statement statement;
+        statement.kind = StatementKind::Conditional;
+        statement.expression = parseExpression(1);
+
+        consume(
+            t_ENTAO,
+            "Palavra 'entao' esperada."
+            );
+
+        enterScope("entao");
+        parseStatementList(statement.thenStatements);
+        leaveScope();
+
+        if (check(t_SENAO))
+        {
+            advance();
+
+            statement.hasElse = true;
+
+            enterScope("senao");
+            parseStatementList(statement.elseStatements);
+            leaveScope();
+        }
+
+        consume(
+            t_FIMSE,
+            "Palavra 'fimse' esperada."
+            );
+
+        statements.push_back(
+            std::move(statement)
+            );
+    }
+
+    ExpressionPtr parseExpression(
+        int minPrecedence
+        )
     {
         ExpressionPtr left = parseUnary();
 
         while (true)
         {
-            const int level = precedence(current().id);
+            const int level =
+                precedence(current().id);
 
             if (level < minPrecedence)
             {
                 break;
             }
 
-            const TokenId tokenId = advance().id;
+            const TokenId tokenId =
+                advance().id;
 
             const Operation operation =
                 binaryOperation(tokenId);
@@ -764,6 +1056,16 @@ private:
                 );
         }
 
+        if (check(t_NAO_LOGICO))
+        {
+            advance();
+
+            return makeUnary(
+                Operation::LogicalNot,
+                parseUnary()
+                );
+        }
+
         return parsePrimary();
     }
 
@@ -784,9 +1086,22 @@ private:
             return expression;
         }
 
+        if (check(t_VERDADEIRO))
+        {
+            advance();
+            return makeBoolean(true);
+        }
+
+        if (check(t_FALSO))
+        {
+            advance();
+            return makeBoolean(false);
+        }
+
         if (isIntegerLiteral(current().id))
         {
-            const SourceToken token = advance();
+            const SourceToken token =
+                advance();
 
             return makeLiteral(
                 parseInteger(token)
@@ -827,8 +1142,23 @@ private:
 
     Program program_;
 
-    std::unordered_map<std::string, KnownSymbol> knownSymbols_;
-    std::unordered_set<std::string> declaredNames_;
+    std::unordered_map<
+        std::string,
+        std::unordered_map<std::string, KnownSymbol>
+        > symbols_;
+
+    std::unordered_set<std::string>
+        reservedAssemblyNames_;
+
+    std::unordered_set<std::string>
+        declaredNames_;
+
+    std::vector<std::string> scopeStack_ = {
+        "global"
+    };
+
+    std::size_t nextInternalScopeIndex_ = 1;
+    std::size_t nextLocalId_ = 1;
 };
 
 }
@@ -852,7 +1182,9 @@ Program BipIrBuilder::build(
 
     for (;;)
     {
-        std::unique_ptr<Token> token(lexer.nextToken());
+        std::unique_ptr<Token> token(
+            lexer.nextToken()
+            );
 
         if (!token)
         {
@@ -876,7 +1208,10 @@ Program BipIrBuilder::build(
         }
         );
 
-    Parser parser(std::move(tokens), analysis);
+    Parser parser(
+        std::move(tokens),
+        analysis
+        );
 
     return parser.parse();
 }
