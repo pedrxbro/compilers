@@ -72,7 +72,8 @@ enum class StatementKind
     Output,
     Conditional,
     While,
-    RepeatUntil
+    RepeatUntil,
+    For
 };
 
 struct Statement
@@ -88,8 +89,15 @@ struct Statement
     std::vector<Statement> elseStatements;
     bool hasElse = false;
 
-    // Corpo dos lacos pre-testados e pos-testados.
+    // Corpo dos lacos de repeticao.
     std::vector<Statement> loopStatements;
+
+    // Operacoes do cabecalho do laco para.
+    // A inicializacao executa uma vez, antes do teste.
+    std::vector<Statement> initializationStatements;
+
+    // A pos-operacao executa apos cada iteracao do corpo.
+    std::vector<Statement> postStatements;
 };
 
 struct Program
