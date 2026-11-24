@@ -20,6 +20,7 @@ constexpr int MIN_WORD = -32768;
 constexpr int MAX_WORD = 32767;
 
 constexpr std::size_t MAX_DATA_CELLS = 2048;
+constexpr std::size_t MAX_INSTRUCTIONS = 2048;
 
 struct Temporary
 {
@@ -114,9 +115,7 @@ public:
     explicit EmitterState(const Program &program)
         : program_(program)
     {
-        // Os nomes de origem tambem ficam reservados,
-        // inclusive quando sao substituidos por nomes
-        // exclusivos de memoria para escopos internos.
+        // Reserva tambem os nomes originais dos usuarios.
         for (const std::string &name :
              program_.reservedNames)
         {
@@ -188,10 +187,93 @@ public:
                 normalizedName(declaration.name)
                 );
         }
+
+        // M3.2: registra e reserva os rotulos das rotinas
+        // antes da geracao de rotulos de controle.
+        for (const Routine &routine : program_.routines)
+        {
+            if (routine.name.empty() ||
+                routine.label.empty())
+            {
+                throw CodegenError(
+                    "Rotina com nome ou rotulo invalido.",
+                    routine.position
+                    );
+            }
+
+            if (!routines_.emplace(
+                              routine.name,
+                              &routine
+                              ).second)
+            {
+                throw CodegenError(
+                    "Rotina duplicada no IR: " +
+                        routine.name,
+                    routine.position
+                    );
+            }
+
+            if (!occupiedNames_.insert(
+                                   normalizedName(routine.label)
+                                   ).second)
+            {
+                throw CodegenError(
+                    "Colisao no rotulo da rotina '" +
+                        routine.name + "'.",
+                    routine.position
+                    );
+            }
+
+            for (std::size_t i = 0;
+                 i < routine.parameters.size();
+                 ++i)
+            {
+                const FormalParameter &parameter =
+                    routine.parameters[i];
+
+                if (parameter.type != "inteiro" ||
+                    parameter.scope != routine.scope ||
+                    parameter.position != i + 1)
+                {
+                    throw CodegenError(
+                        "Parametro formal invalido na rotina '" +
+                            routine.name + "'.",
+                        routine.position
+                        );
+                }
+
+                requireScalar(parameter.assemblyName);
+
+                if (!parameterMemory_.insert(
+                                         normalizedName(parameter.assemblyName)
+                                         ).second)
+                {
+                    throw CodegenError(
+                        "Celula de parametro compartilhada "
+                        "indevidamente entre rotinas.",
+                        routine.position
+                        );
+                }
+            }
+        }
     }
 
     std::string generate()
     {
+        // M3.2: impede a execucao acidental das rotinas.
+        // Programas sem rotinas preservam a saida anterior.
+        if (!program_.routines.empty())
+        {
+            instruction("JMP", "_PRINCIPAL");
+
+            for (const Routine &routine : program_.routines)
+            {
+                emitRoutine(routine);
+            }
+        }
+
+        label("_PRINCIPAL");
+
         emitStatementList(program_.statements);
 
         instruction("HLT", "0");
@@ -221,6 +303,7 @@ public:
         output << ".data\n";
 
         // Mantem o formato contiguo de vetores da M2.2.
+        // Os parametros tambem estao em declarations.
         for (const Declaration &declaration :
              program_.declarations)
         {
@@ -245,7 +328,6 @@ public:
         }
 
         output << ".text\n";
-        output << "_PRINCIPAL:\n";
 
         for (const std::string &line : instructions_)
         {
@@ -267,8 +349,7 @@ private:
         const std::string &name
         ) const
     {
-        const auto found =
-            declarations_.find(name);
+        const auto found = declarations_.find(name);
 
         if (found == declarations_.end())
         {
@@ -281,9 +362,7 @@ private:
         return found->second;
     }
 
-    void requireScalar(
-        const std::string &name
-        ) const
+    void requireScalar(const std::string &name) const
     {
         const Declaration &declaration =
             requireDeclaration(name);
@@ -296,9 +375,7 @@ private:
         }
     }
 
-    void requireVector(
-        const std::string &name
-        ) const
+    void requireVector(const std::string &name) const
     {
         const Declaration &declaration =
             requireDeclaration(name);
@@ -311,14 +388,43 @@ private:
         }
     }
 
+    const Routine &requireRoutine(
+        const std::string &name,
+        int position
+        ) const
+    {
+        const auto found = routines_.find(name);
+
+        if (found == routines_.end())
+        {
+            throw CodegenError(
+                "Rotina nao definida no IR: " + name,
+                position
+                );
+        }
+
+        return *found->second;
+    }
+
     void instruction(
         const std::string &opcode,
         const std::string &operand
         )
     {
+        // Rotulos nao ocupam instrucoes.
+        if (instructionCount_ >= MAX_INSTRUCTIONS)
+        {
+            throw CodegenError(
+                "Codigo excede a memoria de instrucoes "
+                "enderecavel do BIP."
+                );
+        }
+
         instructions_.push_back(
             opcode + " " + operand
             );
+
+        ++instructionCount_;
     }
 
     void instruction(
@@ -341,22 +447,32 @@ private:
                 );
         }
 
+        if (instructionCount_ >= MAX_INSTRUCTIONS)
+        {
+            throw CodegenError(
+                "Rotulo fora da memoria de instrucoes BIP."
+                );
+        }
+
+        if (!emittedLabels_.insert(
+                               normalizedName(name)
+                               ).second)
+        {
+            throw CodegenError(
+                "Rotulo emitido mais de uma vez: " + name
+                );
+        }
+
         instructions_.push_back(name + ":");
     }
 
-    // Cada compilacao possui seu proprio contador.
-    // Os rotulos seguem o padrao R1, R2, R3, ...
-    // utilizado nos exemplos de Assembly do professor.
-    //
-    // A verificacao em occupiedNames_ evita conflitos
-    // com identificadores declarados pelo usuario.
+    // Mantem os rotulos de controle no formato R1, R2.
     std::string newLabel()
     {
         for (;;)
         {
             const std::string candidate =
-                "R" +
-                std::to_string(nextLabelId_++);
+                "R" + std::to_string(nextLabelId_++);
 
             if (occupiedNames_.insert(
                                   normalizedName(candidate)
@@ -399,12 +515,22 @@ private:
             }
         }
 
+        if (temporaries_.size() >=
+            MAX_DATA_CELLS - dataCells_)
+        {
+            throw CodegenError(
+                "Variaveis e temporarios excedem "
+                "a memoria de dados BIP."
+                );
+        }
+
         std::string name;
 
         for (;;)
         {
-            name = "temp" +
-                   std::to_string(nextTemporaryId_++);
+            name =
+                "temp" +
+                std::to_string(nextTemporaryId_++);
 
             if (occupiedNames_.insert(
                                   normalizedName(name)
@@ -444,9 +570,145 @@ private:
             );
     }
 
-    static std::string memoryOpcode(
-        Operation operation
-        )
+    void ensureNoLiveTemporaries() const
+    {
+        for (const Temporary &temporary : temporaries_)
+        {
+            if (temporary.inUse)
+            {
+                throw CodegenError(
+                    "Chamada ou retorno com temporario "
+                    "ainda ocupado."
+                    );
+            }
+        }
+    }
+
+    // ========================================================
+    // M3.2 - ROTINAS E PASSAGEM DE PARAMETROS POR COPIA
+    // ========================================================
+
+    void emitRoutine(const Routine &routine)
+    {
+        ensureNoLiveTemporaries();
+
+        currentRoutine_ = routine.name;
+
+        label(routine.label);
+
+        emitStatementList(routine.statements);
+
+        ensureNoLiveTemporaries();
+
+        // Procedimentos nao retornam valores.
+        instruction("RETURN", "0");
+
+        currentRoutine_.clear();
+    }
+
+    void emitCall(const Statement &statement)
+    {
+        const Routine &routine = requireRoutine(
+            statement.routineName,
+            statement.position
+            );
+
+        if (currentRoutine_ == routine.name)
+        {
+            throw CodegenError(
+                "Recursao nao suportada na rotina '" +
+                    routine.name + "'.",
+                statement.position
+                );
+        }
+
+        if (!currentRoutine_.empty())
+        {
+            throw CodegenError(
+                "Chamadas entre sub-rotinas ainda nao "
+                "sao suportadas.",
+                statement.position
+                );
+        }
+
+        if (statement.arguments.size() !=
+            routine.parameters.size())
+        {
+            throw CodegenError(
+                "Quantidade de argumentos invalida "
+                "na chamada de '" + routine.name + "'.",
+                statement.position
+                );
+        }
+
+        ensureNoLiveTemporaries();
+
+        std::vector<std::string> argumentTemporaries;
+
+        argumentTemporaries.reserve(
+            statement.arguments.size()
+            );
+
+        // ETAPA 1:
+        // Avalia cada argumento da esquerda para a direita.
+        // Mantem todos os resultados protegidos ate que a
+        // lista completa tenha sido avaliada.
+        for (const ExpressionPtr &argument :
+             statement.arguments)
+        {
+            const std::string temporary =
+                acquireTemporary();
+
+            emitExpression(argument);
+
+            instruction("STO", temporary);
+
+            argumentTemporaries.push_back(temporary);
+        }
+
+        // ETAPA 2:
+        // Copia os valores para as celulas independentes
+        // dos parametros formais, respeitando a assinatura.
+        for (std::size_t i = 0;
+             i < argumentTemporaries.size();
+             ++i)
+        {
+            const FormalParameter &parameter =
+                routine.parameters[i];
+
+            requireScalar(parameter.assemblyName);
+
+            instruction(
+                "LD",
+                argumentTemporaries[i]
+                );
+
+            instruction(
+                "STO",
+                parameter.assemblyName
+                );
+        }
+
+        // Os temporarios de argumentos nao precisam
+        // permanecer vivos durante a execucao da rotina.
+        for (const std::string &temporary :
+             argumentTemporaries)
+        {
+            releaseTemporary(temporary);
+        }
+
+        ensureNoLiveTemporaries();
+
+        // Nao existe copia de volta apos o RETURN.
+        // O argumento original permanece independente.
+        instruction("CALL", routine.label);
+    }
+
+    // ========================================================
+    // EXPRESSOES ARITMETICAS E BIT A BIT
+    // ========================================================
+
+    static std::string memoryOpcode(Operation operation)
     {
         switch (operation)
         {
@@ -472,9 +734,7 @@ private:
         }
     }
 
-    static std::string immediateOpcode(
-        Operation operation
-        )
+    static std::string immediateOpcode(Operation operation)
     {
         switch (operation)
         {
@@ -587,8 +847,7 @@ private:
         emitExpression(expression.left);
 
         instruction(
-            expression.operation ==
-                    Operation::ShiftLeft
+            expression.operation == Operation::ShiftLeft
                 ? "SLL"
                 : "SRL",
             amount
@@ -604,17 +863,14 @@ private:
                 );
         }
 
-        if (expression.operation ==
-                Operation::ShiftLeft ||
-            expression.operation ==
-                Operation::ShiftRight)
+        if (expression.operation == Operation::ShiftLeft ||
+            expression.operation == Operation::ShiftRight)
         {
             emitShift(expression);
             return;
         }
 
-        const Expression &right =
-            *expression.right;
+        const Expression &right = *expression.right;
 
         if (right.operation == Operation::Literal &&
             fitsImmediate(right.value))
@@ -726,9 +982,10 @@ private:
         }
     }
 
-    // Avalia a comparacao como um desvio para dois
-    // destinos explicitos. A ordem de avaliacao dos
-    // operandos e preservada.
+    // ========================================================
+    // EXPRESSOES RELACIONAIS E LOGICAS - M3.1
+    // ========================================================
+
     void emitComparison(
         const Expression &expression,
         const std::string &trueLabel,
@@ -759,9 +1016,8 @@ private:
         if (operation == Operation::Equal ||
             operation == Operation::NotEqual)
         {
-            // Igualdade e desigualdade dependem apenas
-            // de zero. O wrap da subtracao de 16 bits
-            // nao altera a igualdade de operandos.
+            // O wrap da subtracao nao altera o teste
+            // de igualdade de palavras de 16 bits.
             instruction("LD", leftTemporary);
             instruction("SUB", rightTemporary);
 
@@ -774,12 +1030,9 @@ private:
         }
         else
         {
-            // Para ordenacao, a subtracao de inteiros
-            // de sinais opostos pode produzir overflow.
-            //
-            // Com sinais opostos, a comparacao e
-            // decidida diretamente pelos sinais.
-            // Somente com sinais iguais fazemos SUB.
+            // Preserva o tratamento de overflow da M3.1.
+            // Com sinais opostos, a comparacao pode ser
+            // decidida sem subtrair os operandos.
             const std::string leftNegative =
                 newLabel();
 
@@ -845,8 +1098,6 @@ private:
     }
 
     // Compila expressoes logicas com curto-circuito.
-    // Nao usa AND/OR bit a bit para representar
-    // operadores logicos da linguagem.
     void emitCondition(
         const ExpressionPtr &expression,
         const std::string &trueLabel,
@@ -904,6 +1155,7 @@ private:
                 trueLabel,
                 falseLabel
                 );
+
             return;
         }
 
@@ -932,6 +1184,7 @@ private:
                 trueLabel,
                 falseLabel
                 );
+
             return;
         }
 
@@ -946,6 +1199,7 @@ private:
                 trueLabel,
                 falseLabel
                 );
+
             return;
         }
 
@@ -954,6 +1208,10 @@ private:
             "ou expressao logica valida."
             );
     }
+
+    // ========================================================
+    // ATRIBUICAO, ENTRADA E SAIDA
+    // ========================================================
 
     void emitAssignment(const Statement &statement)
     {
@@ -986,8 +1244,7 @@ private:
         emitExpression(statement.destinationIndex);
         instruction("STO", indexTemporary);
 
-        // A expressao direita pode acessar vetores e
-        // alterar o registrador especial $indr.
+        // A expressao direita pode alterar $indr.
         emitExpression(statement.expression);
 
         const std::string valueTemporary =
@@ -1038,6 +1295,10 @@ private:
 
         instruction("STO", "$out_port");
     }
+
+    // ========================================================
+    // ESTRUTURAS DE CONTROLE - M3.1
+    // ========================================================
 
     void emitConditional(const Statement &statement)
     {
@@ -1105,8 +1366,7 @@ private:
         const std::string endLabel =
             newLabel();
 
-        // Testa antes da primeira iteracao e novamente
-        // sempre que o corpo terminar.
+        // Testa antes da primeira iteracao.
         label(conditionLabel);
 
         emitCondition(
@@ -1141,15 +1401,14 @@ private:
         const std::string endLabel =
             newLabel();
 
-        // O corpo sempre executa antes do primeiro teste.
+        // O corpo executa antes do primeiro teste.
         label(startLabel);
 
         emitStatementList(
             statement.loopStatements
             );
 
-        // ATE e condicao de encerramento:
-        // verdadeiro encerra, falso repete.
+        // ATE verdadeiro encerra, falso repete.
         emitCondition(
             statement.expression,
             endLabel,
@@ -1187,7 +1446,7 @@ private:
                 );
         }
 
-        // 1. Inicializacao, executada uma unica vez.
+        // Inicializacao, executada uma unica vez.
         emitStatementList(
             statement.initializationStatements
             );
@@ -1201,32 +1460,27 @@ private:
         const std::string endLabel =
             newLabel();
 
-        // 2. Inicio e 3. avaliacao da condicao.
         label(conditionLabel);
 
-        // 4. Condicao falsa desvia diretamente ao fim.
         emitCondition(
             statement.expression,
             bodyLabel,
             endLabel
             );
 
-        // 5. Corpo do laco.
         label(bodyLabel);
 
         emitStatementList(
             statement.loopStatements
             );
 
-        // 6. Pos-operacao, depois de todo o corpo.
+        // Pos-operacao executada apos o corpo.
         emitStatementList(
             statement.postStatements
             );
 
-        // 7. Nova avaliacao da condicao.
         instruction("JMP", conditionLabel);
 
-        // 8. Encerramento.
         label(endLabel);
     }
 
@@ -1261,6 +1515,10 @@ private:
         case StatementKind::For:
             emitFor(statement);
             return;
+
+        case StatementKind::Call:
+            emitCall(statement);
+            return;
         }
 
         throw CodegenError(
@@ -1285,10 +1543,24 @@ private:
         Declaration
         > declarations_;
 
+    std::unordered_map<
+        std::string,
+        const Routine *
+        > routines_;
+
     std::unordered_set<std::string>
         occupiedNames_;
 
+    std::unordered_set<std::string>
+        emittedLabels_;
+
+    std::unordered_set<std::string>
+        parameterMemory_;
+
+    std::string currentRoutine_;
+
     std::size_t dataCells_ = 0;
+    std::size_t instructionCount_ = 0;
     std::size_t nextTemporaryId_ = 1;
     std::size_t nextLabelId_ = 1;
 
