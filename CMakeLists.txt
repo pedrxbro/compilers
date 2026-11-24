@@ -362,6 +362,26 @@ if(BUILD_TESTING)
         COMMAND semantic_m32_integration_test
     )
 
+    # ========================================================
+    # TESTES DE CHAMADAS E PARAMETROS POR COPIA M3.2
+    # ========================================================
+
+    add_executable(bip_m32_test
+
+        tests/BipM32Test.cpp
+    )
+
+    target_link_libraries(bip_m32_test
+
+        PRIVATE
+            compiler_core
+    )
+
+    add_test(
+        NAME bip_m32_test
+        COMMAND bip_m32_test
+    )
+
 endif()
 
 # ============================================================

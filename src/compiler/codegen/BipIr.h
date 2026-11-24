@@ -73,7 +73,8 @@ enum class StatementKind
     Conditional,
     While,
     RepeatUntil,
-    For
+    For,
+    Call
 };
 
 struct Statement
@@ -93,11 +94,37 @@ struct Statement
     std::vector<Statement> loopStatements;
 
     // Operacoes do cabecalho do laco para.
-    // A inicializacao executa uma vez, antes do teste.
     std::vector<Statement> initializationStatements;
-
-    // A pos-operacao executa apos cada iteracao do corpo.
     std::vector<Statement> postStatements;
+
+    // M3.2: chamada de sub-rotina.
+    std::string routineName;
+    std::vector<ExpressionPtr> arguments;
+    int position = -1;
+};
+
+// M3.2: parametro formal associado a uma celula de memoria.
+struct FormalParameter
+{
+    std::string name;
+    std::string assemblyName;
+    std::string type;
+    std::string scope;
+
+    std::size_t position = 0;
+};
+
+// M3.2: definicao de uma sub-rotina.
+struct Routine
+{
+    std::string name;
+    std::string label;
+    std::string scope;
+
+    std::vector<FormalParameter> parameters;
+    std::vector<Statement> statements;
+
+    int position = -1;
 };
 
 struct Program
@@ -108,6 +135,9 @@ struct Program
     // Identificadores originais reservados para impedir
     // conflitos entre nomes de usuario e rotulos internos.
     std::vector<std::string> reservedNames;
+
+    // M3.2: rotinas na ordem de declaracao.
+    std::vector<Routine> routines;
 };
 
 class CodegenError : public std::runtime_error

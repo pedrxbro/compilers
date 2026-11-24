@@ -34,6 +34,18 @@ struct KnownSymbol
     bool isSupported = false;
     std::size_t size = 1;
     std::string assemblyName;
+
+    bool isParameter = false;
+    std::string type;
+    std::optional<std::size_t> parameterPosition;
+};
+
+struct KnownRoutine
+{
+    std::string type;
+    std::string scope;
+
+    std::vector<const SymbolTableEntry *> parameters;
 };
 
 struct Target
@@ -323,8 +335,7 @@ public:
                 );
         }
 
-        // Primeiro reserva os nomes originais para que
-        // rotulos de variaveis locais nao colidam com eles.
+        // Reserva todos os identificadores originais.
         for (const SymbolTableEntry &symbol :
              analysis.symbolTable)
         {
@@ -337,8 +348,101 @@ public:
 
         reservedAssemblyNames_.insert("_PRINCIPAL");
 
-        // Ordenacao deterministica, independente da ordem
-        // interna da tabela de simbolos do analisador.
+        // Registra as assinaturas das sub-rotinas.
+        for (const SymbolTableEntry &symbol :
+             analysis.symbolTable)
+        {
+            if (symbol.kind != "funcao")
+            {
+                continue;
+            }
+
+            if (symbol.scope != "global")
+            {
+                throw CodegenError(
+                    "Sub-rotina fora do escopo global: " +
+                    symbol.name
+                    );
+            }
+
+            KnownRoutine routine;
+            routine.type = symbol.type;
+            routine.scope = "global::" + symbol.name;
+
+            if (!routines_.emplace(
+                              symbol.name,
+                              std::move(routine)
+                              ).second)
+            {
+                throw CodegenError(
+                    "Sub-rotina duplicada na tabela: " +
+                    symbol.name
+                    );
+            }
+        }
+
+        // Associa os parametros ao escopo da rotina.
+        for (const SymbolTableEntry &symbol :
+             analysis.symbolTable)
+        {
+            if (symbol.kind != "parametro")
+            {
+                continue;
+            }
+
+            bool associated = false;
+
+            for (auto &entry : routines_)
+            {
+                if (entry.second.scope == symbol.scope)
+                {
+                    entry.second.parameters.push_back(&symbol);
+                    associated = true;
+                    break;
+                }
+            }
+
+            if (!associated)
+            {
+                throw CodegenError(
+                    "Parametro sem sub-rotina correspondente: " +
+                    symbol.name
+                    );
+            }
+        }
+
+        // A ordem dos parametros segue a assinatura.
+        for (auto &entry : routines_)
+        {
+            auto &parameters = entry.second.parameters;
+
+            std::sort(
+                parameters.begin(),
+                parameters.end(),
+                [](const SymbolTableEntry *left,
+                   const SymbolTableEntry *right)
+                {
+                    return left->parameterPosition.value_or(0) <
+                           right->parameterPosition.value_or(0);
+                }
+                );
+
+            for (std::size_t i = 0;
+                 i < parameters.size();
+                 ++i)
+            {
+                if (parameters[i]->parameterPosition.value_or(0)
+                    != i + 1)
+                {
+                    throw CodegenError(
+                        "Posicao de parametro invalida na rotina '" +
+                        entry.first + "'."
+                        );
+                }
+            }
+        }
+
+        // Ordenacao deterministica para alocacao de memoria.
         std::vector<const SymbolTableEntry *> ordered;
 
         for (const SymbolTableEntry &symbol :
@@ -370,15 +474,27 @@ public:
         for (const SymbolTableEntry *symbol : ordered)
         {
             if (symbol->kind != "variavel" &&
-                symbol->kind != "vetor")
+                symbol->kind != "vetor" &&
+                symbol->kind != "parametro")
             {
                 continue;
             }
 
             KnownSymbol known;
 
-            known.isVector = symbol->kind == "vetor";
+            known.isParameter =
+                symbol->kind == "parametro";
+
+            known.isVector =
+                symbol->kind == "vetor" ||
+                (known.isParameter &&
+                 symbol->vectorSize.has_value());
+
             known.isSupported = symbol->type == "inteiro";
+            known.type = symbol->type;
+
+            known.parameterPosition =
+                symbol->parameterPosition;
 
             if (known.isVector)
             {
@@ -392,8 +508,10 @@ public:
             }
             else
             {
+                // M3.2: utiliza o nome da rotina e
+                // do identificador para gerar a memoria.
                 known.assemblyName =
-                    allocateLocalName();
+                    allocateLocalName(*symbol);
             }
 
             const bool inserted =
@@ -423,12 +541,19 @@ public:
             "Identificador do programa esperado."
             );
 
-        if (!check(t_INICIO))
+        // As definicoes aparecem antes de INICIO.
+        while (check(t_PROCEDIMENTO) ||
+               check(t_FUNCAO))
         {
-            fail(
-                "Procedimentos e funcoes ainda nao possuem "
-                "geracao de Assembly BIP."
-                );
+            if (check(t_FUNCAO))
+            {
+                fail(
+                    "Funcoes com retorno ainda nao possuem "
+                    "geracao BIP nesta etapa da M3.2."
+                    );
+            }
+
+            parseProcedure();
         }
 
         consume(
@@ -455,6 +580,14 @@ public:
                 );
         }
 
+        if (program_.routines.size() != routines_.size())
+        {
+            throw CodegenError(
+                "Definicoes de rotinas divergem "
+                "da tabela de simbolos."
+                );
+        }
+
         return std::move(program_);
     }
 
@@ -467,6 +600,12 @@ private:
     bool check(TokenId id) const
     {
         return current().id == id;
+    }
+
+    bool checkNext(TokenId id) const
+    {
+        return index_ + 1 < tokens_.size() &&
+               tokens_[index_ + 1].id == id;
     }
 
     SourceToken advance()
@@ -499,16 +638,45 @@ private:
             );
     }
 
-    static bool reservedName(
-        const std::string &name
-        )
+    static bool reservedName(const std::string &name)
     {
         return normalizedName(name) == "_PRINCIPAL" ||
                name.rfind("__bip_tmp_", 0) == 0 ||
                name.rfind("__bip_vec_slot_", 0) == 0;
     }
 
-    std::string allocateLocalName()
+    // ========================================================
+    // M3.2 - NOMENCLATURA DE MEMORIA E ROTULOS
+    // ========================================================
+
+    // Reserva um nome legivel e exclusivo para o Assembly.
+    // Em caso de colisao, acrescenta um sufixo numerico.
+    std::string allocateUniqueName(
+        const std::string &baseName
+        )
+    {
+        std::string candidate = baseName;
+        std::size_t suffix = 2;
+
+        for (;;)
+        {
+            if (!reservedName(candidate) &&
+                reservedAssemblyNames_.insert(
+                                          normalizedName(candidate)
+                                          ).second)
+            {
+                return candidate;
+            }
+
+            candidate =
+                baseName + "_" +
+                std::to_string(suffix++);
+        }
+    }
+
+    // Mantem a nomenclatura anterior para variaveis
+    // de escopos internos do programa principal.
+    std::string allocateInternalLocalName()
     {
         for (;;)
         {
@@ -525,8 +693,123 @@ private:
         }
     }
 
-    // Reproduz a identificacao dos escopos internos
-    // utilizada pelo ScopeManager na analise semantica.
+    // Gera nomes conforme o padrao dos slides:
+    //
+    // global::exibir
+    // x -> EXIBIR_x
+    //
+    // global::exibir
+    // resultado -> EXIBIR_resultado
+    //
+    // global::exibir::entao#1
+    // resultado -> EXIBIR_ENTAO_1_resultado
+    //
+    // global::exibir::faca#2::entao#3
+    // valor -> EXIBIR_FACA_2_ENTAO_3_valor
+    std::string allocateLocalName(
+        const SymbolTableEntry &symbol
+        )
+    {
+        const std::string globalPrefix = "global::";
+
+        if (symbol.scope.rfind(globalPrefix, 0) != 0)
+        {
+            return allocateInternalLocalName();
+        }
+
+        const std::string relativeScope =
+            symbol.scope.substr(globalPrefix.size());
+
+        const auto firstSeparator =
+            relativeScope.find("::");
+
+        const std::string routineName =
+            relativeScope.substr(0, firstSeparator);
+
+        // Escopos internos do principal nao pertencem
+        // a uma rotina registrada na tabela.
+        if (routines_.find(routineName) ==
+            routines_.end())
+        {
+            return allocateInternalLocalName();
+        }
+
+        std::string prefix =
+            normalizedName(routineName);
+
+        if (firstSeparator != std::string::npos)
+        {
+            std::size_t start =
+                firstSeparator + 2;
+
+            while (start < relativeScope.size())
+            {
+                const auto end =
+                    relativeScope.find("::", start);
+
+                std::string part =
+                    relativeScope.substr(
+                        start,
+                        end == std::string::npos
+                            ? std::string::npos
+                            : end - start
+                        );
+
+                // O caractere # pertence ao nome do
+                // escopo semantico, mas nao ao Assembly.
+                std::replace(
+                    part.begin(),
+                    part.end(),
+                    '#',
+                    '_'
+                    );
+
+                prefix += "_" + normalizedName(part);
+
+                if (end == std::string::npos)
+                {
+                    break;
+                }
+
+                start = end + 2;
+            }
+        }
+
+        const std::string baseName =
+            prefix + "_" + symbol.name;
+
+        return allocateUniqueName(baseName);
+    }
+
+    // Gera rotulos com o nome original da rotina:
+    //
+    // exibir -> _EXIBIR
+    // dobro  -> _DOBRO
+    //
+    // O nome _PRINCIPAL permanece reservado.
+    std::string allocateRoutineLabel(
+        const std::string &routineName
+        )
+    {
+        const std::string baseName =
+            "_" + normalizedName(routineName);
+
+        // Trata separadamente o rotulo reservado,
+        // mantendo um nome significativo para a rotina.
+        if (baseName == "_PRINCIPAL")
+        {
+            return allocateUniqueName(
+                "_PRINCIPAL_2"
+                );
+        }
+
+        return allocateUniqueName(baseName);
+    }
+
+    // ========================================================
+    // GERENCIAMENTO DE ESCOPOS
+    // ========================================================
+
     void enterScope(const std::string &label)
     {
         const std::string qualifiedName =
@@ -564,8 +847,8 @@ private:
                 );
         }
 
-        // A busca parte do escopo atual e percorre
-        // exclusivamente seus ancestrais.
+        // A busca percorre exclusivamente os ancestrais
+        // do escopo atual.
         for (auto scope = scopeStack_.rbegin();
              scope != scopeStack_.rend();
              ++scope)
@@ -590,7 +873,7 @@ private:
             {
                 throw CodegenError(
                     "O gerador BIP suporta apenas "
-                    "variaveis e vetores inteiros: " +
+                    "variaveis, vetores e parametros inteiros: " +
                         token.lexeme,
                     token.position
                     );
@@ -608,6 +891,375 @@ private:
             );
     }
 
+    const KnownRoutine &requireRoutine(
+        const SourceToken &identifier
+        ) const
+    {
+        const auto found =
+            routines_.find(identifier.lexeme);
+
+        if (found == routines_.end())
+        {
+            throw CodegenError(
+                "Sub-rotina '" +
+                    identifier.lexeme +
+                    "' nao encontrada na tabela de simbolos.",
+                identifier.position
+                );
+        }
+
+        return found->second;
+    }
+
+    // ========================================================
+    // M3.2 - DEFINICAO DE PROCEDIMENTOS
+    // ========================================================
+
+    void parseProcedure()
+    {
+        consume(
+            t_PROCEDIMENTO,
+            "Palavra 'procedimento' esperada."
+            );
+
+        const SourceToken identifier = consume(
+            t_IDENTIFICADOR,
+            "Nome do procedimento esperado."
+            );
+
+        const KnownRoutine &known =
+            requireRoutine(identifier);
+
+        if (known.type != "void")
+        {
+            throw CodegenError(
+                "Procedimento diverge da tabela de simbolos: " +
+                    identifier.lexeme,
+                identifier.position
+                );
+        }
+
+        if (!definedRoutines_.insert(
+                                 identifier.lexeme
+                                 ).second)
+        {
+            throw CodegenError(
+                "Procedimento duplicado no IR: " +
+                    identifier.lexeme,
+                identifier.position
+                );
+        }
+
+        Routine routine;
+
+        routine.name = identifier.lexeme;
+
+        // O rotulo passa a utilizar o nome da rotina.
+        routine.label =
+            allocateRoutineLabel(identifier.lexeme);
+
+        routine.scope = known.scope;
+        routine.position = identifier.position;
+
+        // O escopo da rotina nao consome o contador dos
+        // escopos internos numerados.
+        scopeStack_.push_back(routine.scope);
+
+        currentRoutine_ = routine.name;
+
+        consume(
+            t_ABRE_PARENTESE,
+            "Parenteses de abertura esperado no procedimento."
+            );
+
+        if (!check(t_FECHA_PARENTESE))
+        {
+            for (;;)
+            {
+                parseFormalParameter(routine, known);
+
+                if (!check(t_VIRGULA))
+                {
+                    break;
+                }
+
+                advance();
+            }
+        }
+
+        consume(
+            t_FECHA_PARENTESE,
+            "Parenteses de fechamento esperado no procedimento."
+            );
+
+        if (routine.parameters.size() !=
+            known.parameters.size())
+        {
+            throw CodegenError(
+                "Quantidade de parametros diverge da assinatura "
+                "do procedimento '" + routine.name + "'.",
+                identifier.position
+                );
+        }
+
+        consume(
+            t_INICIO,
+            "Palavra 'inicio' esperada no procedimento."
+            );
+
+        parseStatementList(routine.statements);
+
+        consume(
+            t_FIMPROCEDIMENTO,
+            "Palavra 'fimprocedimento' esperada."
+            );
+
+        currentRoutine_.clear();
+
+        leaveScope();
+
+        program_.routines.push_back(
+            std::move(routine)
+            );
+    }
+
+    void parseFormalParameter(
+        Routine &routine,
+        const KnownRoutine &known
+        )
+    {
+        if (!check(t_INTEIRO))
+        {
+            fail(
+                "A geracao BIP suporta apenas parametros "
+                "escalares inteiros no procedimento '" +
+                routine.name + "'."
+                );
+        }
+
+        advance();
+
+        const SourceToken identifier = consume(
+            t_IDENTIFICADOR,
+            "Identificador esperado no parametro."
+            );
+
+        const std::size_t index =
+            routine.parameters.size();
+
+        if (index >= known.parameters.size())
+        {
+            throw CodegenError(
+                "Parametro excedente na assinatura de '" +
+                    routine.name + "'.",
+                identifier.position
+                );
+        }
+
+        const SymbolTableEntry &entry =
+            *known.parameters[index];
+
+        if (check(t_ABRE_COLCHETE) ||
+            entry.vectorSize.has_value())
+        {
+            throw CodegenError(
+                "Passagem integral de vetores por parametro "
+                "nao suportada pelo gerador BIP: " +
+                    identifier.lexeme,
+                identifier.position
+                );
+        }
+
+        if (entry.name != identifier.lexeme ||
+            entry.type != "inteiro" ||
+            entry.scope != routine.scope ||
+            entry.parameterPosition.value_or(0) != index + 1)
+        {
+            throw CodegenError(
+                "Parametro '" +
+                    identifier.lexeme +
+                    "' diverge da tabela de simbolos.",
+                identifier.position
+                );
+        }
+
+        const KnownSymbol &symbol =
+            requireSymbol(identifier);
+
+        if (!symbol.isParameter ||
+            symbol.isVector ||
+            symbol.parameterPosition.value_or(0) != index + 1)
+        {
+            throw CodegenError(
+                "Parametro formal invalido: " +
+                    identifier.lexeme,
+                identifier.position
+                );
+        }
+
+        if (!declaredNames_.insert(
+                               symbol.assemblyName
+                               ).second)
+        {
+            throw CodegenError(
+                "Memoria de parametro duplicada: " +
+                    identifier.lexeme,
+                identifier.position
+                );
+        }
+
+        // Cada parametro possui uma celula independente.
+        program_.declarations.push_back(
+            {
+                symbol.assemblyName,
+                1,
+                false
+            }
+            );
+
+        FormalParameter parameter;
+
+        parameter.name = entry.name;
+        parameter.assemblyName = symbol.assemblyName;
+        parameter.type = entry.type;
+        parameter.scope = entry.scope;
+        parameter.position =
+            entry.parameterPosition.value();
+
+        routine.parameters.push_back(
+            std::move(parameter)
+            );
+    }
+
+    // ========================================================
+    // M3.2 - CHAMADAS DE PROCEDIMENTOS
+    // ========================================================
+
+    void parseCall(
+        std::vector<Statement> &statements
+        )
+    {
+        const SourceToken identifier = consume(
+            t_IDENTIFICADOR,
+            "Identificador esperado na chamada."
+            );
+
+        const KnownRoutine &routine =
+            requireRoutine(identifier);
+
+        if (routine.type != "void")
+        {
+            throw CodegenError(
+                "Chamada de funcao ainda nao suportada "
+                "pelo gerador BIP: " +
+                    identifier.lexeme,
+                identifier.position
+                );
+        }
+
+        if (currentRoutine_ == identifier.lexeme)
+        {
+            throw CodegenError(
+                "Recursao nao suportada com armazenamento "
+                "estatico de parametros: " +
+                    identifier.lexeme,
+                identifier.position
+                );
+        }
+
+        // Chamadas entre rotinas continuam fora
+        // do escopo desta etapa.
+        if (!currentRoutine_.empty())
+        {
+            throw CodegenError(
+                "Chamadas entre sub-rotinas ainda nao "
+                "sao suportadas pelo gerador BIP: " +
+                    currentRoutine_ + " -> " +
+                    identifier.lexeme,
+                identifier.position
+                );
+        }
+
+        Statement statement;
+
+        statement.kind = StatementKind::Call;
+        statement.routineName = identifier.lexeme;
+        statement.position = identifier.position;
+
+        consume(
+            t_ABRE_PARENTESE,
+            "Parenteses de abertura esperado na chamada."
+            );
+
+        // Cada argumento e uma expressao completa.
+        if (!check(t_FECHA_PARENTESE))
+        {
+            for (;;)
+            {
+                statement.arguments.push_back(
+                    parseExpression(1)
+                    );
+
+                if (!check(t_VIRGULA))
+                {
+                    break;
+                }
+
+                advance();
+            }
+        }
+
+        consume(
+            t_FECHA_PARENTESE,
+            "Operacao de argumento sem suporte ou "
+            "parenteses de fechamento ausente."
+            );
+
+        consume(
+            t_PONTO_VIRGULA,
+            "Ponto e virgula esperado apos a chamada."
+            );
+
+        if (statement.arguments.size() !=
+            routine.parameters.size())
+        {
+            throw CodegenError(
+                "O procedimento '" +
+                    identifier.lexeme +
+                    "' esperava " +
+                    std::to_string(routine.parameters.size()) +
+                    " argumentos, mas recebeu " +
+                    std::to_string(statement.arguments.size()) +
+                    ".",
+                identifier.position
+                );
+        }
+
+        for (const SymbolTableEntry *parameter :
+             routine.parameters)
+        {
+            if (parameter->type != "inteiro" ||
+                parameter->vectorSize.has_value())
+            {
+                throw CodegenError(
+                    "Parametro sem suporte na chamada de '" +
+                        identifier.lexeme +
+                        "': " +
+                        parameter->name,
+                    identifier.position
+                    );
+            }
+        }
+
+        statements.push_back(
+            std::move(statement)
+            );
+    }
+
+    // ========================================================
+    // COMANDOS
+    // ========================================================
+
     void parseStatementList(
         std::vector<Statement> &statements
         )
@@ -617,7 +1269,8 @@ private:
                !check(t_SENAO) &&
                !check(t_FIMENQUANTO) &&
                !check(t_FIMPARA) &&
-               !check(t_ATE))
+               !check(t_ATE) &&
+               !check(t_FIMPROCEDIMENTO))
         {
             if (check(DOLLAR))
             {
@@ -632,7 +1285,16 @@ private:
             }
             else if (check(t_IDENTIFICADOR))
             {
-                parseAssignment(statements);
+                // IDENTIFICADOR '(' inicia chamada.
+                // IDENTIFICADOR RECEBE ou '[' inicia atribuicao.
+                if (checkNext(t_ABRE_PARENTESE))
+                {
+                    parseCall(statements);
+                }
+                else
+                {
+                    parseAssignment(statements);
+                }
             }
             else if (check(t_LEIA))
             {
@@ -663,7 +1325,8 @@ private:
                 fail(
                     "Comando ou declaracao sem suporte "
                     "no gerador BIP: '" +
-                    current().lexeme + "'."
+                    current().lexeme +
+                    "'."
                     );
             }
         }
@@ -701,8 +1364,11 @@ private:
                         );
                 }
 
-                const SourceToken sizeToken = advance();
-                const int parsedSize = parseInteger(sizeToken);
+                const SourceToken sizeToken =
+                    advance();
+
+                const int parsedSize =
+                    parseInteger(sizeToken);
 
                 if (parsedSize <= 0)
                 {
@@ -816,7 +1482,8 @@ private:
                     throw CodegenError(
                         "Indice literal fora dos limites "
                         "do vetor '" +
-                            identifier.lexeme + "'.",
+                            identifier.lexeme +
+                            "'.",
                         identifier.position
                         );
                 }
@@ -854,6 +1521,7 @@ private:
             );
 
         Statement statement;
+
         statement.kind = StatementKind::Assignment;
         statement.destination = std::move(target.name);
         statement.expression = parseExpression(1);
@@ -882,10 +1550,10 @@ private:
             );
 
         Statement statement;
+
         statement.kind = StatementKind::Assignment;
         statement.destination = std::move(target.name);
-        statement.destinationIndex =
-            std::move(target.index);
+        statement.destinationIndex = std::move(target.index);
         statement.expression = std::move(expression);
 
         statements.push_back(
@@ -920,10 +1588,10 @@ private:
             );
 
         Statement statement;
+
         statement.kind = StatementKind::Input;
         statement.destination = std::move(target.name);
-        statement.destinationIndex =
-            std::move(target.index);
+        statement.destinationIndex = std::move(target.index);
 
         statements.push_back(
             std::move(statement)
@@ -967,7 +1635,8 @@ private:
             }
             else
             {
-                expression = makeVariable(target.name);
+                expression =
+                    makeVariable(target.name);
             }
         }
         else
@@ -989,6 +1658,7 @@ private:
             );
 
         Statement statement;
+
         statement.kind = StatementKind::Output;
         statement.expression = std::move(expression);
 
@@ -1007,6 +1677,7 @@ private:
             );
 
         Statement statement;
+
         statement.kind = StatementKind::Conditional;
         statement.expression = parseExpression(1);
 
@@ -1016,7 +1687,9 @@ private:
             );
 
         enterScope("entao");
+
         parseStatementList(statement.thenStatements);
+
         leaveScope();
 
         if (check(t_SENAO))
@@ -1026,7 +1699,9 @@ private:
             statement.hasElse = true;
 
             enterScope("senao");
+
             parseStatementList(statement.elseStatements);
+
             leaveScope();
         }
 
@@ -1050,6 +1725,7 @@ private:
             );
 
         Statement statement;
+
         statement.kind = StatementKind::While;
         statement.expression = parseExpression(1);
 
@@ -1064,8 +1740,6 @@ private:
 
         parseStatementList(statement.loopStatements);
 
-        // A acao #47 encerra o escopo antes de
-        // consumir FIMENQUANTO.
         leaveScope();
 
         consume(
@@ -1087,8 +1761,7 @@ private:
             "Palavra 'para' esperada."
             );
 
-        // A acao semantica #46 ocorre imediatamente
-        // apos PARA e cria o escopo "para".
+        // A acao semantica #46 cria o escopo "para".
         enterScope("para");
 
         Statement statement;
@@ -1103,15 +1776,16 @@ private:
             "Palavra 'ate' esperada no laco para."
             );
 
-        statement.expression = parseExpression(1);
+        statement.expression =
+            parseExpression(1);
 
         consume(
             t_PASSO,
             "Palavra 'passo' esperada no laco para."
             );
 
-        // Embora apareca antes de FACA na fonte,
-        // esta operacao so executa depois do corpo.
+        // Executa depois do corpo, apesar da posicao
+        // desta operacao no codigo-fonte.
         statement.postStatements.push_back(
             parseControlOperation()
             );
@@ -1123,8 +1797,6 @@ private:
 
         parseStatementList(statement.loopStatements);
 
-        // A acao semantica #47 encerra o escopo
-        // imediatamente antes de FIMPARA.
         leaveScope();
 
         consume(
@@ -1149,7 +1821,6 @@ private:
         Statement statement;
         statement.kind = StatementKind::RepeatUntil;
 
-        // A acao semantica #46 inicia o escopo.
         enterScope("faca");
 
         parseStatementList(statement.loopStatements);
@@ -1159,8 +1830,7 @@ private:
             "Palavra 'ate' esperada no laco faca."
             );
 
-        // A condicao pertence ao escopo do corpo:
-        // na gramatica, #45 ocorre antes de #47.
+        // A condicao pertence ao escopo do corpo.
         statement.expression = parseExpression(1);
 
         leaveScope();
@@ -1174,6 +1844,10 @@ private:
             std::move(statement)
             );
     }
+
+    // ========================================================
+    // EXPRESSOES
+    // ========================================================
 
     ExpressionPtr parseExpression(
         int minPrecedence
@@ -1286,15 +1960,18 @@ private:
 
         if (check(t_IDENTIFICADOR))
         {
-            Target target = parseTarget();
-
-            if (check(t_ABRE_PARENTESE))
+            // Identifica chamadas antes de procurar
+            // o identificador como uma variavel.
+            if (checkNext(t_ABRE_PARENTESE))
             {
                 fail(
                     "Chamada de funcao sem suporte "
-                    "em expressao BIP."
+                    "em expressao BIP: " +
+                    current().lexeme
                     );
             }
+
+            Target target = parseTarget();
 
             if (target.index)
             {
@@ -1309,7 +1986,8 @@ private:
 
         fail(
             "Operando sem suporte no gerador BIP: '" +
-            current().lexeme + "'."
+            current().lexeme +
+            "'."
             );
     }
 
@@ -1323,6 +2001,14 @@ private:
         std::unordered_map<std::string, KnownSymbol>
         > symbols_;
 
+    std::unordered_map<
+        std::string,
+        KnownRoutine
+        > routines_;
+
+    std::unordered_set<std::string>
+        definedRoutines_;
+
     std::unordered_set<std::string>
         reservedAssemblyNames_;
 
@@ -1332,6 +2018,8 @@ private:
     std::vector<std::string> scopeStack_ = {
         "global"
     };
+
+    std::string currentRoutine_;
 
     std::size_t nextInternalScopeIndex_ = 1;
     std::size_t nextLocalId_ = 1;
