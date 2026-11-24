@@ -1,5 +1,4 @@
-﻿
-cmake_minimum_required(VERSION 3.16)
+﻿cmake_minimum_required(VERSION 3.16)
 
 project(compiler VERSION 0.1 LANGUAGES CXX)
 
@@ -341,6 +340,26 @@ if(BUILD_TESTING)
     add_test(
         NAME bip_m31_test
         COMMAND bip_m31_test
+    )
+
+    # ========================================================
+    # TESTES DE COMPATIBILIDADE DE PARAMETROS M3.2
+    # ========================================================
+
+    add_executable(semantic_m32_integration_test
+
+        tests/SemanticM32IntegrationTest.cpp
+    )
+
+    target_link_libraries(semantic_m32_integration_test
+
+        PRIVATE
+            compiler_core
+    )
+
+    add_test(
+        NAME semantic_m32_integration_test
+        COMMAND semantic_m32_integration_test
     )
 
 endif()

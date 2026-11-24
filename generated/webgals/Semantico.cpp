@@ -1,8 +1,8 @@
-
 #include "Semantico.h"
 
 #include <algorithm>
 #include <string>
+#include <utility>
 #include <vector>
 
 // Executa a ação semântica associada a uma regra da gramática.
@@ -152,18 +152,19 @@ void Semantico::executeAction(
         break;
 
     // ========================================================
-    // CHAMADAS DE SUB-ROTINAS - M2.1
+    // CHAMADAS DE SUB-ROTINAS - M2.1 + M3.2
     // ========================================================
     case 33:
         beginSubroutineCall(lexeme, position);
         break;
 
     case 34:
-        discardExpressionResult(position);
+        captureCallArgument(position);
         break;
 
     case 35:
         // Marca o fim da lista de argumentos.
+        // A validacao ocorre nas acoes #36 e #37.
         break;
 
     case 36:
@@ -979,24 +980,31 @@ void Semantico::validateCondition(
     }
 }
 
-void Semantico::discardExpressionResult(
-    int position
-    )
-{
-    popExpressionType(position);
-}
-
 // ============================================================
-// CHAMADAS DE SUB-ROTINAS
+// CHAMADAS DE SUB-ROTINAS - M3.2
 // ============================================================
 
+// Inicia uma chamada e cria um contexto independente.
 void Semantico::beginSubroutineCall(
     const std::string &name,
     int position
     )
 {
+    ScopeManager &scopeManager =
+        declarationProcessor_.scopeManager();
+
     Symbol *symbol =
-        resolveIdentifier(name, position);
+        scopeManager.findVisible(name);
+
+    if (symbol == nullptr)
+    {
+        throw SemanticError(
+            "Sub-rotina '" +
+                name +
+                "' nao foi declarada.",
+            position
+            );
+    }
 
     if (symbol->kind() != SymbolKind::Function)
     {
@@ -1010,10 +1018,63 @@ void Semantico::beginSubroutineCall(
 
     symbol->markUsed();
 
-    subroutineCalls_.push_back(symbol);
+    // A profundidade registra os tipos que ja pertenciam
+    // a uma expressao externa antes do inicio desta chamada.
+    // Esses tipos nao devem ser consumidos como argumentos.
+    SubroutineCallContext call;
+
+    call.symbol = symbol;
+    call.position = position;
+    call.expressionDepth = expressionTypes_.size();
+
+    subroutineCalls_.push_back(
+        std::move(call)
+        );
 }
 
-Symbol *Semantico::popSubroutineCall(
+// Captura o tipo resultante de um argumento completo.
+void Semantico::captureCallArgument(
+    int position
+    )
+{
+    if (subroutineCalls_.empty())
+    {
+        throw SemanticError(
+            "Argumento encontrado sem uma chamada de sub-rotina pendente.",
+            position
+            );
+    }
+
+    SubroutineCallContext &call =
+        subroutineCalls_.back();
+
+    // Cada argumento completo deve produzir exatamente
+    // um tipo acima da profundidade inicial da chamada.
+    if (expressionTypes_.size() !=
+        call.expressionDepth + 1)
+    {
+        throw SemanticError(
+            "Nao foi possivel identificar o tipo do argumento da sub-rotina '" +
+                call.symbol->name() +
+                "'.",
+            position
+            );
+    }
+
+    const DataType argumentType =
+        popExpressionType(position);
+
+    call.arguments.push_back(
+        {
+            argumentType,
+            position
+        }
+        );
+}
+
+// Remove somente o contexto da chamada mais interna.
+Semantico::SubroutineCallContext
+Semantico::popSubroutineCall(
     int position
     )
 {
@@ -1025,27 +1086,232 @@ Symbol *Semantico::popSubroutineCall(
             );
     }
 
-    Symbol *symbol = subroutineCalls_.back();
+    SubroutineCallContext call =
+        std::move(subroutineCalls_.back());
 
     subroutineCalls_.pop_back();
 
-    return symbol;
-}
-
-void Semantico::completeCallAsStatement(
-    int position
-    )
-{
-    Symbol *symbol =
-        popSubroutineCall(position);
-
-    if (symbol == nullptr)
+    if (call.symbol == nullptr)
     {
         throw SemanticError(
             "Chamada de sub-rotina invalida.",
             position
             );
     }
+
+    // Todos os argumentos devem ter sido capturados pela
+    // acao #34 antes da conclusao da chamada.
+    if (expressionTypes_.size() != call.expressionDepth)
+    {
+        throw SemanticError(
+            "Existem expressoes pendentes na chamada da sub-rotina '" +
+                call.symbol->name() +
+                "'.",
+            call.position
+            );
+    }
+
+    return call;
+}
+
+// Localiza os parametros formais pertencentes a rotina chamada.
+std::vector<const Symbol *> Semantico::formalParameters(
+    const Symbol &subroutine
+    ) const
+{
+    std::vector<const Symbol *> parameters;
+
+    const std::string routineScope =
+        subroutine.scope() +
+        "::" +
+        subroutine.name();
+
+    const std::vector<const Symbol *> symbols =
+        declarationProcessor_
+            .scopeManager()
+            .allSymbols();
+
+    for (const Symbol *symbol : symbols)
+    {
+        if (symbol == nullptr)
+        {
+            continue;
+        }
+
+        if (symbol->kind() != SymbolKind::Parameter)
+        {
+            continue;
+        }
+
+        // Considera exclusivamente os parametros do
+        // escopo da rotina que esta sendo chamada.
+        if (symbol->scope() != routineScope)
+        {
+            continue;
+        }
+
+        parameters.push_back(symbol);
+    }
+
+    // A tabela utiliza um unordered_map.
+    // A ordem correta e a posicao formal de declaracao.
+    std::sort(
+        parameters.begin(),
+        parameters.end(),
+        [](const Symbol *left, const Symbol *right)
+        {
+            return left->parameterPosition().value() <
+                   right->parameterPosition().value();
+        }
+        );
+
+    return parameters;
+}
+
+// Valida quantidade, ordem e tipos dos argumentos.
+void Semantico::validateCallArguments(
+    const SubroutineCallContext &call
+    )
+{
+    if (call.symbol == nullptr)
+    {
+        throw SemanticError(
+            "Chamada de sub-rotina invalida.",
+            call.position
+            );
+    }
+
+    const Symbol &subroutine =
+        *call.symbol;
+
+    const bool isProcedure =
+        subroutine.type() == DataType::Void;
+
+    const std::string routineDescription =
+        isProcedure
+            ? "O procedimento '"
+            : "A funcao '";
+
+    const std::string routineReference =
+        isProcedure
+            ? "do procedimento '"
+            : "da funcao '";
+
+    const std::vector<const Symbol *> parameters =
+        formalParameters(subroutine);
+
+    const std::size_t expectedCount =
+        parameters.size();
+
+    const std::size_t receivedCount =
+        call.arguments.size();
+
+    // Primeiro verifica a quantidade de argumentos.
+    if (expectedCount != receivedCount)
+    {
+        throw SemanticError(
+            routineDescription +
+                subroutine.name() +
+                "' esperava " +
+                std::to_string(expectedCount) +
+                " parametros, mas recebeu " +
+                std::to_string(receivedCount) +
+                ".",
+            call.position
+            );
+    }
+
+    // Com a quantidade correta, compara cada argumento
+    // com o parametro formal da mesma posicao.
+    for (std::size_t index = 0;
+         index < expectedCount;
+         ++index)
+    {
+        const Symbol &parameter =
+            *parameters[index];
+
+        const CallArgument &argument =
+            call.arguments[index];
+
+        const std::string argumentDescription =
+            "O argumento " +
+            std::to_string(index + 1) +
+            " " +
+            routineReference +
+            subroutine.name() +
+            "'";
+
+        // A semantica atual exige que vetores utilizados
+        // como valores sejam indexados.
+        // Portanto, um argumento escalar nunca deve ser
+        // aceito como se representasse um vetor completo.
+        if (parameter.vectorSize().has_value())
+        {
+            throw SemanticError(
+                argumentDescription +
+                    " corresponde ao parametro vetorial '" +
+                    parameter.name() +
+                    "'. A passagem integral de vetores por parametro nao e suportada.",
+                argument.position
+                );
+        }
+
+        const DataType expectedType =
+            parameter.type();
+
+        const DataType receivedType =
+            argument.type;
+
+        // Reutiliza a politica de compatibilidade das
+        // atribuicoes: destino = formal, origem = argumento.
+        const CompatibilityResult result =
+            SemanticTable::atribType(
+                expectedType,
+                receivedType
+                );
+
+        if (result == CompatibilityResult::Error)
+        {
+            throw SemanticError(
+                argumentDescription +
+                    " possui tipo incompativel: esperado " +
+                    SemanticTable::typeName(expectedType) +
+                    ", recebido " +
+                    SemanticTable::typeName(receivedType) +
+                    ".",
+                argument.position
+                );
+        }
+
+        // Conversoes permitidas com risco de perda de dados
+        // geram aviso, sem impedir a analise semantica.
+        if (result == CompatibilityResult::Warning)
+        {
+            warnings_.push_back(
+                {
+                    argumentDescription +
+                        " realiza conversao de " +
+                        SemanticTable::typeName(receivedType) +
+                        " para " +
+                        SemanticTable::typeName(expectedType) +
+                        " no parametro '" +
+                        parameter.name() +
+                        "' e pode causar perda de dados.",
+                    argument.position
+                }
+                );
+        }
+    }
+}
+
+void Semantico::completeCallAsStatement(
+    int position
+    )
+{
+    const SubroutineCallContext call =
+        popSubroutineCall(position);
+
+    validateCallArguments(call);
 
     // O valor retornado pela função não é utilizado.
 }
@@ -1054,27 +1320,28 @@ void Semantico::completeCallAsExpression(
     int position
     )
 {
-    Symbol *symbol =
+    const SubroutineCallContext call =
         popSubroutineCall(position);
 
-    if (symbol == nullptr)
-    {
-        throw SemanticError(
-            "Chamada de funcao invalida.",
-            position
-            );
-    }
+    Symbol *symbol =
+        call.symbol;
 
+    // Preserva a proibicao existente de procedimentos
+    // em expressoes e atribuicoes.
     if (symbol->type() == DataType::Void)
     {
         throw SemanticError(
             "Procedimento '" +
                 symbol->name() +
                 "' nao pode participar de uma expressao.",
-            position
+            call.position
             );
     }
 
+    validateCallArguments(call);
+
+    // Somente chamadas validas produzem um tipo de retorno.
+    // O tipo passa a integrar a expressao externa.
     expressionTypes_.push_back(
         symbol->type()
         );

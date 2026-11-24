@@ -7,6 +7,7 @@
 #include "DeclarationProcessor.h"
 #include "SemanticTable.h"
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <vector>
@@ -36,6 +37,24 @@ private:
         std::string name;
         int position = -1;
         bool indexed = false;
+    };
+
+    // M3.2 - Argumento efetivamente fornecido em uma chamada.
+    struct CallArgument
+    {
+        DataType type = DataType::Unknown;
+        int position = -1;
+    };
+
+    // M3.2 - Contexto independente de uma chamada de sub-rotina.
+    struct SubroutineCallContext
+    {
+        Symbol *symbol = nullptr;
+        int position = -1;
+
+        std::size_t expressionDepth = 0;
+
+        std::vector<CallArgument> arguments;
     };
 
     Symbol *resolveIdentifier(
@@ -134,17 +153,25 @@ private:
         int position
         );
 
-    void discardExpressionResult(
-        int position
-        );
-
     void beginSubroutineCall(
         const std::string &name,
         int position
         );
 
-    Symbol *popSubroutineCall(
+    void captureCallArgument(
         int position
+        );
+
+    SubroutineCallContext popSubroutineCall(
+        int position
+        );
+
+    std::vector<const Symbol *> formalParameters(
+        const Symbol &subroutine
+        ) const;
+
+    void validateCallArguments(
+        const SubroutineCallContext &call
         );
 
     void completeCallAsStatement(
@@ -185,7 +212,7 @@ private:
     std::vector<UnaryOperator>
         unaryOperators_;
 
-    std::vector<Symbol *>
+    std::vector<SubroutineCallContext>
         subroutineCalls_;
 
     Symbol *currentSubroutine_ = nullptr;
